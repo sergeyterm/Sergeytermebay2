@@ -94,7 +94,7 @@ public final class ExportInstrumentation extends Instrumentation {
                 .append(new Sequence.Clip(input.toString(),"last",4000,6000)).move(1,0);
         ClipExporter.Result result=SequenceExporter.export(context,source,muted,new AtomicBoolean(),value->{});
         try{
-            require(result.endUs==4_000_000,"Wrong sequence duration");
+            require(result.endUs==4_000_000,"Wrong sequence duration: "+result.endUs+"; source tracks: "+sourceFormats(context,input));
             MediaExtractor extractor=new MediaExtractor();
             try{
                 extractor.setDataSource(context,result.uri,null);int video=-1,audio=0;
@@ -109,6 +109,16 @@ public final class ExportInstrumentation extends Instrumentation {
                 int frames=0;while(extractor.getSampleTrackIndex()>=0){frames++;if(!extractor.advance())break;}require(frames==96,"Missing or duplicated sequence frames: "+frames);
             }finally{extractor.release();}
         }finally{context.getContentResolver().delete(result.uri,null,null);}
+    }
+
+    private String sourceFormats(Context context, Uri input) throws Exception {
+        MediaExtractor extractor = new MediaExtractor();
+        try {
+            extractor.setDataSource(context, input, null);
+            StringBuilder formats = new StringBuilder();
+            for (int i=0; i<extractor.getTrackCount(); i++) formats.append(extractor.getTrackFormat(i)).append(';');
+            return formats.toString();
+        } finally { extractor.release(); }
     }
 
     private java.util.Set<String> outputs(Context context) {
