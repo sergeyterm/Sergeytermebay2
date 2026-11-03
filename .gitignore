@@ -1,0 +1,10 @@
+build/
+app/build/
+.gradle/
+.idea/
+local.properties
+*.iml
+signing/
+*.keystore
+*.jks
+app/src/androidTest/assets/*.mp4
