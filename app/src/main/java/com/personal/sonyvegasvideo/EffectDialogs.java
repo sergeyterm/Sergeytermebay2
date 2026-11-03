@@ -27,11 +27,12 @@ public final class EffectDialogs {
         LinearLayout body=new LinearLayout(activity);body.setOrientation(LinearLayout.VERTICAL);int pad=dp(activity,16);body.setPadding(pad,pad,pad,pad);
         ScrollView scroll=new ScrollView(activity);scroll.setFillViewport(true);scroll.addView(body);
         List<Runnable> validation=new ArrayList<>();String title;
-        if("transitions".equals(section)){
-            title="Transitions — появление и исчезновение";
-            note(activity,body,"Переходы применяются в начале и конце экспортируемого диапазона. В середине изображение остаётся полным. Это переходы из/в чёрный фон.");
-            choose(activity,body,"transition","Переход",new String[]{"none","dissolve","cross","wipe","cascade"},new String[]{"Нет","Dissolve — плавное появление","Cross Effect — раскрытие крестом","Wipe — шторка","3D Cascade — каскадные полосы"},draft.transition,value->draft.transition=value);
-            slider(activity,body,"transitionMs","Длительность, мс",50,3000,draft.transitionMs,0,value->draft.transitionMs=Math.round(value));
+        if("transitions".equals(section)||"sequenceTransitions".equals(section)){
+            boolean sequence="sequenceTransitions".equals(section);
+            title=sequence?"Transitions — между клипами":"Transitions — появление и исчезновение";
+            note(activity,body,sequence?"Каждая пара соседних клипов перекрывается на указанное время: кадры одного ролика переходят в другой. Начало первого и конец последнего клипа не затемняются. Итоговая длительность сокращается на сумму перекрытий. Для коротких клипов переход автоматически сокращается.":"Переходы применяются в начале и конце экспортируемого диапазона. В середине изображение остаётся полным. Это переходы из/в чёрный фон.");
+            choose(activity,body,"transition","Переход",new String[]{"none","dissolve","cross","wipe","cascade"},new String[]{"Нет",sequence?"Dissolve — перетекание кадров":"Dissolve — плавное появление","Cross Effect — раскрытие крестом","Wipe — шторка","3D Cascade — каскадные полосы"},draft.transition,value->draft.transition=value);
+            slider(activity,body,"transitionMs","Длительность, мс",50,5000,draft.transitionMs,0,value->draft.transitionMs=Math.round(value));
         }else if("title".equals(section)){
             title="Titles & Text";note(activity,body,"Текст накладывается поверх видео и записывается в экспорт. Пустой текст убирает титр.");
             EditText text=new EditText(activity);text.setContentDescription("title");text.setHint("Текст титра");text.setText(draft.title);text.setMinLines(2);text.setMaxLines(4);text.setFilters(new InputFilter[]{new InputFilter.LengthFilter(200)});body.addView(text);validation.add(()->draft.title=text.getText().toString());
@@ -52,11 +53,13 @@ public final class EffectDialogs {
             TextView removeAudio=action(activity,body,"removeAudio","Убрать музыкальную дорожку",()->{draft.audioUri="";});removeAudio.setEnabled(!draft.audioUri.isEmpty());
             slider(activity,body,"audioGain","Громкость музыки, %",0,100,draft.audioGain*100,0,value->draft.audioGain=value/100);
             slider(activity,body,"masterGain","Общая громкость экспорта, %",0,100,draft.masterGain*100,0,value->draft.masterGain=value/100);
+            slider(activity,body,"audioPan","Панорама: влево − / вправо +",-1,1,draft.audioPan,2,value->draft.audioPan=value);
         }else if("animation".equals(section)){
             title="Анимация — два ключевых состояния";animation(activity,body,draft);
         }else{
             title="Video FX";
             choose(activity,body,"preset","Цветовой фильтр",new String[]{"none","mono","sepia","vivid","cool","warm","invert","vintage"},new String[]{"Без фильтра","Monochrome — чёрно-белый","Sepia","Vivid — яркий","Cool — холодный","Warm — тёплый","Invert — негатив","Vintage"},draft.preset,value->draft.preset=value);
+            slider(activity,body,"videoOpacity","Непрозрачность видео, %",0,100,draft.videoOpacity*100,0,value->draft.videoOpacity=value/100);
             slider(activity,body,"brightness","Яркость",-100,100,draft.brightness*100,0,value->draft.brightness=value/100);
             slider(activity,body,"contrast","Контраст",-95,95,draft.contrast*100,0,value->draft.contrast=value/100);
             slider(activity,body,"saturation","Насыщенность, %",0,200,draft.saturation*100,0,value->draft.saturation=value/100);
@@ -84,7 +87,7 @@ public final class EffectDialogs {
     }
     private static EffectSpec reset(EffectSpec before,String section){
         EffectSpec out=before.copy(),defaults=new EffectSpec();
-        if("transitions".equals(section)){out.transition="none";out.transitionMs=defaults.transitionMs;}
+        if("transitions".equals(section)||"sequenceTransitions".equals(section)){out.transition="none";out.transitionMs=defaults.transitionMs;}
         else if("title".equals(section)){out.title="";out.titleColor=defaults.titleColor;out.titleSize=defaults.titleSize;out.titleY=defaults.titleY;}
         else if("layers".equals(section)){out.overlayUri="";out.audioUri="";out.overlayScale=defaults.overlayScale;out.overlayX=defaults.overlayX;out.overlayY=defaults.overlayY;out.audioGain=defaults.audioGain;out.masterGain=1;}
         else {if(!"animation".equals(section)){out.brightness=0;out.contrast=0;out.saturation=1;out.hue=0;out.blur=0;out.mosaic=0;out.chromaKey=false;out.chromaColor=defaults.chromaColor;out.chromaThreshold=defaults.chromaThreshold;out.preset="none";}out.zoomStart=1;out.zoomEnd=1;out.rotationStart=0;out.rotationEnd=0;}

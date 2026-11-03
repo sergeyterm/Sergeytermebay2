@@ -38,11 +38,13 @@ final class EditorUiChecks {
         step("project codec compatibility and malformed inputs");projectCodec(source);
         step("open native workspace and import through a document-result mock");
         main=s.test.startActivitySync(new Intent(s.context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));s.test.waitForIdleSync();
+        s.await(()->s.main(()->main.hasWindowFocus()&&main.getWindow().getDecorView().getWidth()>0),10000,"Main workspace never received window focus");
         check(s.main(()->!description(main,"Render As… — сохранить MP4").isEnabled()),"Render enabled with no media");
-        for(String menu:new String[]{"File","Edit","View","Insert","Tools","Options","Help"}){
-            s.clickText(main,menu);check(!s.windowText().isEmpty(),"Empty menu "+menu);s.back();
+        for(String[] menu:new String[][]{{"File","New"},{"Edit","Select all"},{"View","Hide docking area"},{"Insert","Marker"},{"Tools","Render As…"},{"Options","Loop playback"},{"Help","About…"}}){
+            s.clickText(main,menu[0]);s.menuReady(menu[1]);check(s.hasText(menu[1]),"Menu item missing: "+menu[0]+" / "+menu[1]);s.back();
         }
         importMain(source);EditorPreview preview=preview(main);ready(main);check(!s.main(preview::isPlaying),"Import started playback");check(s.main(preview::getDuration)>5000,"Imported media duration missing");
+        step("docking, Explorer, preview sizing and visible paused video");workspaceViews(source);
 
         step("precise range validation, undo and redo");
         s.clickDescription(main,"Точные границы фрагмента");s.setEditable(0,"00:00:00.500");s.setEditable(1,"00:00:02.500");s.windowClick("OK");
@@ -51,6 +53,12 @@ final class EditorUiChecks {
         check(s.hasText("Loop region"),"Invalid trim dismissed its validation dialog");s.windowClick("Отмена");awaitRange("00:00:00.500","00:00:02.500");
         s.clickDescription(main,"Отменить изменение");check(!range().contains("00:00:02.500"),"Undo failed to restore range");
         s.clickDescription(main,"Повторить изменение");awaitRange("00:00:00.500","00:00:02.500");
+        step("zoom, fit, both transport rows and local save");zoomAndLocalSave();
+        step("drawn video track slider commits one undoable opacity edit");
+        float oldOpacity=saveMain(saved).effects.videoOpacity;TimelineView headerTimeline=s.main(()->NativeTestSupport.findClass(main.getWindow().getDecorView(),TimelineView.class));
+        s.main(()->{float density=s.context.getResources().getDisplayMetrics().density;float header=Math.max(98*density,Math.min(150*density,headerTimeline.getWidth()*.27f)),y=99*density;long now=SystemClock.uptimeMillis();android.view.MotionEvent down=android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,header*.8f,y,0),move=android.view.MotionEvent.obtain(now,now+80,android.view.MotionEvent.ACTION_MOVE,header*.4f,y,0),up=android.view.MotionEvent.obtain(now,now+120,android.view.MotionEvent.ACTION_UP,header*.4f,y,0);try{headerTimeline.dispatchTouchEvent(down);headerTimeline.dispatchTouchEvent(move);headerTimeline.dispatchTouchEvent(up);}finally{down.recycle();move.recycle();up.recycle();}return null;});s.settle();
+        float draggedOpacity=saveMain(saved).effects.videoOpacity;check(draggedOpacity>0&&draggedOpacity<.75f&&Math.abs(draggedOpacity-oldOpacity)>.1f,"Drawn video Level slider did not change saved output opacity");
+        s.clickDescription(main,"Отменить изменение");ready(main);check(Math.abs(saveMain(saved).effects.videoOpacity-oldOpacity)<.01f,"One Undo did not restore the entire track-slider gesture");
 
         step("transport, frame stepping and loop playback");
         s.clickDescription(main,"Воспроизвести / пауза");s.await(()->s.main(preview::isPlaying),10000,"Playback never started");
@@ -65,6 +73,7 @@ final class EditorUiChecks {
         s.clickDescription(main,"Пауза");s.clickDescription(main,"Зациклить выделенный фрагмент");
         View rate=s.main(()->NativeTestSupport.textPrefix(main.getWindow().getDecorView(),"Rate:"));s.click(rate);s.windowClick("1.5×");
         check(s.main(()->((TextView)rate).getText().toString().contains("1.50")),"Playback rate label not updated");s.click(rate);s.windowClick("1.0×");
+        step("properties, help and About report usable information");informationDialogs();
 
         step("mute, marker editing and history");
         s.clickDescription(main,"Отключить звук исходного ролика");check(s.main(()->description(main,"Отключить звук исходного ролика").isSelected()),"Mute did not activate");
@@ -80,7 +89,12 @@ final class EditorUiChecks {
         }
         s.clickText(main,"Transitions");for(String item:new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}){s.clickDescription(main,item);check(s.hasText("Transitions — появление и исчезновение"),"Transition palette item does not open settings: "+item);s.windowClick("Отмена");}
         s.clickText(main,"Video FX");for(String item:new String[]{"Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation"}){s.clickDescription(main,item);check(s.hasText(item.equals("Zoom & Rotation")?"Анимация — два ключевых состояния":"Video FX"),"Effect palette item does not open settings: "+item);s.windowClick("Отмена");}
-        s.clickDescription(main,"Текст и титры");s.setField("title","VEGAS QA");s.windowClick("Применить");ready(main);
+        s.clickDescription(main,"Настройки эффектов");s.setProgressField("brightness",650);s.windowClick("Применить");ready(main);
+        check(Math.abs(saveMain(saved).effects.brightness-.3f)<.015,"Effect slider Apply was not committed");
+        s.clickDescription(main,"Отменить изменение");ready(main);check(Math.abs(saveMain(saved).effects.brightness)<.015,"Effect slider Undo did not restore its value");
+        s.clickDescription(main,"Повторить изменение");ready(main);check(Math.abs(saveMain(saved).effects.brightness-.3f)<.015,"Effect slider Redo did not restore its value");
+        s.clickDescription(main,"Reset effects");ready(main);check(saveMain(saved).effects.isIdentity(),"Reset effects did not clear the applied filter");
+        s.clickDescription(main,"Текст и титры");s.setField("title","VEGAS QA");s.setField("titleColor","not-a-color");s.windowClick("Применить");check(s.hasText("Titles & Text"),"Invalid title color dismissed the settings dialog");s.setField("titleColor","#ffffff");s.windowClick("Применить");ready(main);
         check("VEGAS QA".equals(saveMain(saved).effects.title),"Title settings not saved");
         s.clickDescription(main,"Отменить изменение");ready(main);check(saveMain(saved).effects.title.isEmpty(),"Undo did not remove title");
         s.clickDescription(main,"Повторить изменение");ready(main);check("VEGAS QA".equals(saveMain(saved).effects.title),"Redo did not restore title");
@@ -92,6 +106,9 @@ final class EditorUiChecks {
         check(red.toString().equals(saveMain(saved).effects.overlayUri),"Video layer picker did not update project");
         pick=s.picker(Intent.ACTION_OPEN_DOCUMENT,music);s.clickText(main,"Insert");s.windowClick("Audio track");s.picked(pick);s.await(()->s.hasText("Видео- и аудиослои"),15000,"Audio layer was not validated");s.windowClick("Применить");ready(main);
         ProjectCodec.Project configured=saveMain(saved);check(music.toString().equals(configured.effects.audioUri),"Audio picker did not update project");
+        s.clickDescription(main,"Слои видео и аудио");s.windowDescriptionClick("removeOverlay");s.windowDescriptionClick("removeAudio");s.windowClick("Применить");ready(main);
+        ProjectCodec.Project removed=saveMain(saved);check(removed.effects.overlayUri.isEmpty()&&removed.effects.audioUri.isEmpty()&&removed.effects.title.equals(configured.effects.title),"Removing layers changed unrelated settings or retained a layer");
+        s.clickDescription(main,"Отменить изменение");ready(main);check(saveMain(saved).effects.equals(configured.effects),"Undo did not restore removed video/audio layers");
         openMain(saved);ready(main);ProjectCodec.Project reopened=saveMain(saved);
         check(reopened.effects.equals(configured.effects)&&reopened.sequence.length()==configured.sequence.length(),"Project roundtrip lost effects/layers/range");
 
@@ -116,7 +133,7 @@ final class EditorUiChecks {
         step("sequence exact split, reorder, delete, trim, history and persistence");
         Instrumentation.ActivityMonitor sequenceMonitor=s.test.addMonitor(SequenceActivity.class.getName(),null,false);
         s.clickDescription(main,"Монтаж: разрезать, удалить и склеить");sequence=s.test.waitForMonitorWithTimeout(sequenceMonitor,15000);s.test.removeMonitor(sequenceMonitor);check(sequence!=null,"Timeline editor did not open");sequenceReady();
-        for(String name:new String[]{"File","Edit","View","Insert","Tools","Help"}){s.clickText(sequence,name);check(!s.windowText().isEmpty(),"Empty sequence menu "+name);s.back();}
+        for(String[] menu:new String[][]{{"File","New"},{"Edit","Split (S)"},{"View","Zoom in"},{"Insert","Video events…"},{"Tools","Video FX…"},{"Help","Editing help"}}){s.clickText(sequence,menu[0]);s.menuReady(menu[1]);check(s.hasText(menu[1]),"Missing sequence menu item "+menu[1]);s.back();}
         SequenceTimeline timeline=s.main(()->NativeTestSupport.findClass(sequence.getWindow().getDecorView(),SequenceTimeline.class));check(timeline!=null,"Missing sequence timeline");
         s.main(()->{Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,900);check(timeline.performAccessibilityAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(),args),"Accessible exact seek not supported");return null;});
         s.clickDescription(sequence,"Разрезать в позиции курсора (S)");s.await(()->eventCount()==2,10000,"Exact split did not create two events");
@@ -141,6 +158,7 @@ final class EditorUiChecks {
         importMain(source);ready(main);check(!s.main(preview(main)::isPlaying),"Recovery import auto-started playback");
 
         step("generator button creates a playable clip");
+        s.clickText(main,"Media Generators");for(String item:new String[]{"Solid Color","Titles & Text","Checkerboard","Color Gradient"}){s.clickDescription(main,item);check(s.hasText("Media Generator"),"Generator configuration missing: "+item);s.windowClick("Отмена");}
         s.clickText(main,"Media Generators");s.clickDescription(main,"Solid Color");check(s.hasText("Media Generator"),"Generator dialog did not open");
         Uri previous=s.main(()->ExportJob.get().result.uri);s.setField("Длительность генератора","1");s.setField("Цвет генератора","#2050D0");s.windowClick("Создать");
         s.await(()->!s.main(()->ExportJob.get().running)&&s.main(()->ExportJob.get().result)!=null&&!previous.equals(s.main(()->ExportJob.get().result.uri)),120000,"Generator failed: "+s.main(()->ExportJob.get().message));s.own(s.main(()->ExportJob.get().result.uri));ready(main);
@@ -148,7 +166,45 @@ final class EditorUiChecks {
         step("new project clears state and disables media-only actions");s.clickDescription(main,"Новый проект");
         check(!s.main(()->description(main,"Render As… — сохранить MP4").isEnabled()),"New project retains enabled Render");
         s.screenshot("qa-empty-"+size);
+        s.clickText(main,"File");s.windowClick("Restore previous project");ready(main);
+        ProjectCodec.Project restored=saveMain(saved);check(restored.sequence.clips.size()==1&&restored.sequence.length()>=900&&restored.sequence.length()<=1250,"Restore previous project did not recover the generated clip");
     }
+    private void workspaceViews(Uri source)throws Exception{
+        EditorPreview video=preview(main);View libraryTab=s.main(()->NativeTestSupport.findText(main.getWindow().getDecorView(),"Project Media"));int width=s.main(video::getWidth);
+        s.clickText(main,"View");s.windowClick("Hide docking area");s.await(()->!s.main(libraryTab::isShown),5000,"Hide docking area left the library visible");
+        s.await(()->s.main(video::getWidth)>width,5000,"Hiding library did not enlarge preview");
+        s.clickText(main,"View");s.windowClick("Show docking area");s.await(()->s.main(libraryTab::isShown),5000,"Show docking area did not restore library");
+        s.clickText(main,"View");s.windowClick("Explorer");check(s.main(()->NativeTestSupport.findText(main.getWindow().getDecorView(),"▸  Открыть файл…")!=null),"Explorer did not expose file import");
+        Instrumentation.ActivityMonitor monitor=s.picker(Intent.ACTION_OPEN_DOCUMENT,source);s.clickText(main,"▸  Открыть файл…");s.picked(monitor);ready(main);
+        s.clickText(main,"View");s.windowClick("Project Media");check(s.main(libraryTab::isShown),"Project Media menu did not restore media library");
+        s.await(()->colorfulPreview(),15000,"Paused video did not produce visible colored pixels");long fit=surfaceSize();for(String mode:new String[]{"Fill","Zoom"}){s.clickDescription(main,"Размер предпросмотра");s.windowClick(mode);check(s.main(()->((TextView)description(main,"Размер предпросмотра")).getText().toString().equals(mode+" ▾")),"Preview resize selector did not update");s.await(()->surfaceSize()!=fit,5000,"Resize mode did not change actual video surface geometry: "+mode);}
+        s.clickDescription(main,"Размер предпросмотра");s.windowClick("Fit");s.await(()->surfaceSize()==fit,5000,"Fit did not restore video surface geometry");
+        s.await(()->colorfulPreview(),15000,"Paused video did not produce visible colored pixels");check(true,"Paused video visible");
+    }
+    private void zoomAndLocalSave(){
+        s.clickDescription(main,"К концу выделения");s.await(()->Math.abs(s.main(preview(main)::getCurrentPosition)-2500)<100,5000,"Preview end button did not seek");
+        s.clickDescription(main,"К началу выделения");s.await(()->Math.abs(s.main(preview(main)::getCurrentPosition)-500)<100,5000,"Preview begin button did not seek");
+        s.clickDescription(main,"К концу");s.await(()->Math.abs(s.main(preview(main)::getCurrentPosition)-2500)<100,5000,"Bottom end button did not seek");
+        s.clickDescription(main,"К началу");s.await(()->Math.abs(s.main(preview(main)::getCurrentPosition)-500)<100,5000,"Bottom begin button did not seek");
+        s.clickDescription(main,"Весь ролик");long fit=rulerHash();s.clickDescription(main,"Увеличить масштаб");long zoomed=rulerHash();check(zoomed!=fit,"Zoom in did not redraw timeline ruler");
+        s.clickDescription(main,"Уменьшить масштаб");check(rulerHash()!=zoomed,"Zoom out did not redraw timeline ruler");s.clickDescription(main,"Весь ролик");check(rulerHash()==fit,"Fit project did not restore ruler scale/offset");
+        s.clickDescription(main,"Сохранить проект");SharedPreferences prefs=s.context.getSharedPreferences("editor",0);check(prefs.getInt("start",-1)==500&&prefs.getInt("end",-1)==2500,"Local save did not store selected range");
+        TextView status=s.main(()->NativeTestSupport.textPrefix(main.getWindow().getDecorView(),"Настройки сохранены."));if(status==null)status=s.main(()->NativeTestSupport.textPrefix(main.getWindow().getDecorView(),"Проект сохранён."));check(status!=null,"Local save did not report result");s.click(status);s.menuReady("Состояние");check(s.windowText().contains("сохран"),"Status detail dialog lost its message");s.windowClick("OK");
+    }
+    private void informationDialogs(){
+        s.await(()->s.main(()->{TextView metadata=NativeTestSupport.textPrefix(main.getWindow().getDecorView(),"Project:");return metadata!=null&&metadata.getText().toString().contains("×");}),25000,"Media metadata did not load");
+        s.clickDescription(main,"Свойства медиа");s.menuReady("Media properties");check(s.windowText().contains("Video:")&&s.windowText().contains("Audio:"),"Properties did not include actual video/audio metadata");s.windowClick("OK");
+        s.clickDescription(main,"Справка");s.menuReady("Vegas Video — управление");check(s.windowText().contains("Video FX")&&s.windowText().contains("Render As"),"Help omitted current editing/export operations");s.windowClick("OK");
+        s.clickText(main,"Help");s.windowClick("About…");s.await(()->s.windowText().contains("Личный Android-видеоредактор"),5000,"About did not describe this application");check(s.windowText().contains("Неофициальное"),"About misidentified the app");s.windowClick("OK");
+    }
+    private long surfaceSize(){return s.main(()->{EditorPreview player=NativeTestSupport.findClass(main.getWindow().getDecorView(),EditorPreview.class);View surface=NativeTestSupport.findClass(player,android.view.SurfaceView.class);if(surface==null)surface=NativeTestSupport.findClass(player,android.view.TextureView.class);NativeTestSupport.require(surface!=null&&surface.getWidth()>0&&surface.getHeight()>0,"Video surface was not laid out");return ((long)surface.getWidth()<<32)|surface.getHeight();});}
+    private boolean colorfulPreview(){
+        android.graphics.Rect bounds=s.main(()->{android.graphics.Rect out=new android.graphics.Rect();EditorPreview player=NativeTestSupport.findClass(main.getWindow().getDecorView(),EditorPreview.class);player.getGlobalVisibleRect(out);return out;});
+        android.graphics.Bitmap image=s.test.getUiAutomation().takeScreenshot();if(image==null||bounds.isEmpty())return false;
+        try{int colored=0,total=0;int left=Math.max(0,bounds.left+bounds.width()/5),right=Math.min(image.getWidth(),bounds.right-bounds.width()/5),top=Math.max(0,bounds.top+bounds.height()/5),bottom=Math.min(image.getHeight(),bounds.bottom-bounds.height()/5);for(int y=top;y<bottom;y+=4)for(int x=left;x<right;x+=4){int pixel=image.getPixel(x,y),r=android.graphics.Color.red(pixel),g=android.graphics.Color.green(pixel),b=android.graphics.Color.blue(pixel);if(Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))>35)colored++;total++;}return total>20&&colored>total*.03;}
+        finally{image.recycle();}
+    }
+    private long rulerHash(){return s.main(()->{TimelineView timeline=NativeTestSupport.findClass(main.getWindow().getDecorView(),TimelineView.class);NativeTestSupport.require(timeline!=null&&timeline.getWidth()>0,"Timeline not laid out");android.graphics.Bitmap bitmap=android.graphics.Bitmap.createBitmap(timeline.getWidth(),timeline.getHeight(),android.graphics.Bitmap.Config.ARGB_8888);try{timeline.draw(new android.graphics.Canvas(bitmap));float density=s.context.getResources().getDisplayMetrics().density;int left=(int)Math.max(98*density,Math.min(150*density,timeline.getWidth()*.27f))+3;long hash=0xcbf29ce484222325L;for(int y=Math.round(14*density);y<Math.min(bitmap.getHeight(),Math.round(44*density));y+=2)for(int x=left;x<bitmap.getWidth();x+=2){hash^=bitmap.getPixel(x,y);hash*=0x100000001b3L;}return hash;}finally{bitmap.recycle();}});}
     private void projectCodec(Uri source)throws Exception{
         ProjectCodec.Project original=new ProjectCodec.Project();original.single=true;original.sequence=new Sequence().append(new Sequence.Clip(source.toString(),"QA",137,1137));original.effects.title="Тест Ω";original.effects.brightness=.2f;original.effects.audioUri=source.toString();original.effects.overlayUri=source.toString();original.effects.transition="wipe";original.markers.add(400);original.cursor=350;
         ProjectCodec.Project restored=ProjectCodec.parse(ProjectCodec.write(original));check(restored.effects.equals(original.effects),"Common project lost effect parameters");check(restored.sequence.length()==1000&&restored.markers.size()==1,"Common project lost range/markers");

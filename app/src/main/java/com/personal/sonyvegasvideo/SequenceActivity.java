@@ -44,6 +44,7 @@ public final class SequenceActivity extends Activity {
     private static final int PROJECT_LIMIT=131072, HISTORY_LIMIT=64;
     private Sequence sequence=new Sequence();
     private EffectSpec effects=new EffectSpec();
+    private TransitionTiming timing=new TransitionTiming(sequence,effects);
     private final List<Integer> markers=new ArrayList<>();
     private final ArrayDeque<String> undo=new ArrayDeque<>(), redo=new ArrayDeque<>();
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -66,7 +67,7 @@ public final class SequenceActivity extends Activity {
     private final Runnable tick=new Runnable() {
         @Override public void run() {
             if(resumed && prepared && !busy && !job.running && preview.isPlaying()) {
-                cursor=ClipMath.clamp(preview.getCurrentPosition(),0,sequence.length());
+                cursor=ClipMath.clamp(preview.getCurrentPosition(),0,duration());
                 updateSelection();
                 updateTime();
             }
@@ -103,6 +104,8 @@ public final class SequenceActivity extends Activity {
         } catch(Exception error) {
             failure="Не удалось восстановить проект: "+detail(error);
         }
+        timing=new TransitionTiming(sequence,effects);
+        cursor=ClipMath.clamp(cursor,0,duration());
         build();
         refresh();
         if(!sequence.clips.isEmpty())loadPreview(false);
@@ -193,7 +196,7 @@ public final class SequenceActivity extends Activity {
             updateControls();
         });
         preview.setOnCompletionListener(player->{
-            cursor=sequence.length();
+            cursor=duration();
             updateSelection();
             updateTime();
             updateControls();
@@ -285,7 +288,9 @@ public final class SequenceActivity extends Activity {
                     +"и восстановить края исходника. Delete удаляет фрагмент только из проекта; "
                     +"стрелки меняют порядок. Undo / Redo отменяют монтаж, звук и эффекты.\n\n"
                     +"Tools → Video FX / Transitions / Titles & Text изменяют весь монтажный проект. "
-                    +"Переходы работают на входе и выходе проекта. Insert добавляет музыку и видео поверх основной дорожки. "
+                    +"Между соседними клипами переходы перекрывают конец и начало роликов: движущееся видео и звук плавно смешиваются. "
+                    +"Длительность проекта уменьшается на сумму перекрытий. У единственного клипа переход работает на входе и выходе. "
+                    +"Insert добавляет музыку и видео поверх основной дорожки. "
                     +"Render As сохраняет совместимый MP4 H.264/AAC с эффектами; исходники могут иметь разные параметры.\n\n"
                     +"Проект автоматически восстанавливается при возврате. Save project as сохраняет отдельный .vvp; "
                     +"для открытия исходников нужны сохранённые разрешения Android. Оригинальные видео не изменяются."));
@@ -311,14 +316,18 @@ public final class SequenceActivity extends Activity {
         return value;
     }
     private String json()throws Exception {return ProjectCodec.write(project());}
+    private int duration(){return timing.length;}
+    private int offset(int index){return timing.starts[index];}
+    private int offset(Sequence next,int index){return new TransitionTiming(next,effects).starts[index];}
     private void restore(ProjectCodec.Project value) {
         sequence=value.sequence;
         effects=value.effects==null?new EffectSpec():value.effects.copy().normalize();
+        timing=new TransitionTiming(sequence,effects);
         muted=value.muted;
-        cursor=ClipMath.clamp(value.cursor,0,sequence.length());
+        cursor=ClipMath.clamp(value.cursor,0,duration());
         markers.clear();
-        if(value.markers!=null)for(int marker:value.markers)if(marker>=0&&marker<=sequence.length())markers.add(marker);
-        selected=sequence.indexAt(cursor);
+        if(value.markers!=null)for(int marker:value.markers)if(marker>=0&&marker<=duration())markers.add(marker);
+        selected=timing.indexAt(cursor);
     }
     private void remember() {
         try {undo.addLast(json());while(undo.size()>HISTORY_LIMIT)undo.removeFirst();redo.clear();}
@@ -339,7 +348,7 @@ public final class SequenceActivity extends Activity {
     private void commit(Sequence next,int at,String message) {
         ProjectCodec.Project value=project();
         value.sequence=next;
-        value.cursor=ClipMath.clamp(at,0,next.length());
+        value.cursor=ClipMath.clamp(at,0,new TransitionTiming(next,effects).length);
         applyProject(value,message);
     }
     private void newProject() {
@@ -378,10 +387,9 @@ public final class SequenceActivity extends Activity {
             item.setContentDescription("Фрагмент "+(i+1)+": "+clip.name);
             item.setBackgroundColor(i==selected?0xffb7c6d8:0xffb5b5b5);
             clipList.addView(item,lp(-1,65));
-            item.setOnClickListener(view->seek(sequence.offset(index)));
+            item.setOnClickListener(view->seek(offset(index)));
         }
-        timeline.project(sequence,selected);
-        timeline.settings(effects,muted);
+        timeline.project(sequence,selected,effects,muted);
         updateSelection();
         updateTime();
         updateControls();
@@ -404,7 +412,7 @@ public final class SequenceActivity extends Activity {
         updateControls();
     }
     private void updateSelection() {
-        selected=sequence.indexAt(cursor);
+        selected=timing.indexAt(cursor);
         for(int i=0;i<clipList.getChildCount();i++) {
             if(!sequence.clips.isEmpty())clipList.getChildAt(i).setBackgroundColor(i==selected?0xffb7c6d8:0xffb5b5b5);
         }
@@ -413,7 +421,7 @@ public final class SequenceActivity extends Activity {
     }
     private void seek(int at) {
         if(busy||job.running||sequence.clips.isEmpty())return;
-        cursor=ClipMath.clamp(at,0,sequence.length());
+        cursor=ClipMath.clamp(at,0,duration());
         preview.pause();
         if(previewStopped)loadPreview(false);
         preview.seekTo(cursor);
@@ -425,7 +433,7 @@ public final class SequenceActivity extends Activity {
         if(busy||job.running||sequence.clips.isEmpty())return;
         if(preview.isPlaying())preview.pause();
         else {
-            if(cursor>=sequence.length())seek(0);
+            if(cursor>=duration())seek(0);
             if(previewStopped)loadPreview(false);
             preview.start();
         }
@@ -435,15 +443,18 @@ public final class SequenceActivity extends Activity {
         if(selected<0||busy||job.running)return;
         if(sequence.clips.size()>=64){status("Максимум 64 фрагмента. Удалите ненужный фрагмент.");return;}
         captureCursor();
-        int index=sequence.indexAt(cursor);
+        int index=timing.indexAt(cursor);
         Sequence.Clip clip=sequence.clips.get(index);
-        int source=clip.inMs+cursor-sequence.offset(index);
+        int source=timing.sourceAt(index,cursor);
         if(source<=clip.inMs||source>=clip.outMs) {
             status("Разрез: поставьте курсор внутри фрагмента, между его началом и концом.");
             return;
         }
         preview.pause();
-        try {commit(sequence.split(index,source),cursor,"Фрагмент разрезан: "+ClipMath.clockCode(source)+" исходного файла.");}
+        try {
+            Sequence next=sequence.split(index,source);
+            commit(next,offset(next,index+1),"Фрагмент разрезан: "+ClipMath.clockCode(source)+" исходного файла.");
+        }
         catch(RuntimeException error){status("Разрез: "+detail(error));}
     }
     private void trim() {
@@ -487,7 +498,7 @@ public final class SequenceActivity extends Activity {
                 if(!ClipMath.validRange(a,b)||b>duration)throw new IllegalArgumentException("Границы должны быть внутри исходника, конец позже начала.");
                 if(busy||job.running)throw new IllegalStateException("Дождитесь завершения текущей операции.");
                 Sequence next=sequence.trim(index,a,b);
-                commit(next,next.offset(index),"Границы фрагмента изменены.");
+                commit(next,offset(next,index),"Границы фрагмента изменены.");
                 dialog.dismiss();
             } catch(Exception error){end.setError(detail(error));}
         }));
@@ -495,8 +506,10 @@ public final class SequenceActivity extends Activity {
     }
     private void delete() {
         if(selected<0||busy||job.running)return;
-        int at=sequence.offset(selected);
-        Sequence next=sequence.delete(selected);
+        int index=selected;
+        Sequence next=sequence.delete(index);
+        TransitionTiming changed=new TransitionTiming(next,effects);
+        int at=index<next.clips.size()?changed.starts[index]:changed.length;
         commit(next,at,"Фрагмент удалён из проекта. Исходный файл сохранён.");
     }
     private void duplicate() {
@@ -505,7 +518,7 @@ public final class SequenceActivity extends Activity {
             List<Sequence.Clip> clips=new ArrayList<>(sequence.clips);
             clips.add(selected+1,sequence.clips.get(selected));
             Sequence next=new Sequence(clips);
-            commit(next,next.offset(selected+1),"Фрагмент продублирован.");
+            commit(next,offset(next,selected+1),"Фрагмент продублирован.");
         } catch(RuntimeException error){status("Дублирование: "+detail(error));}
     }
     private void move(int direction) {
@@ -513,7 +526,7 @@ public final class SequenceActivity extends Activity {
         int target=selected+direction;
         if(target<0||target>=sequence.clips.size())return;
         Sequence next=sequence.move(selected,target);
-        commit(next,next.offset(target),"Порядок фрагментов изменён.");
+        commit(next,offset(next,target),"Порядок фрагментов изменён.");
     }
     private void toggleMute() {
         if(busy||job.running)return;
@@ -522,11 +535,16 @@ public final class SequenceActivity extends Activity {
     }
     private void editEffects(String section) {
         if(busy||job.running)return;
-        EffectDialogs.show(this,effects.copy(),section,next->{
+        String dialogSection=section.equals("transitions")&&sequence.clips.size()>1?"sequenceTransitions":section;
+        EffectDialogs.show(this,effects.copy(),dialogSection,next->{
             if(isDestroyed()||busy||job.running)return;
             if(effects.equals(next))return;
+            captureCursor();
+            int index=timing.indexAt(cursor),source=index<0?0:timing.sourceAt(index,cursor);
             ProjectCodec.Project value=project();value.effects=next.copy().normalize();
-            applyProject(value,"Эффекты применены к предпросмотру и экспорту проекта.");
+            TransitionTiming changed=new TransitionTiming(sequence,value.effects);
+            if(index>=0)value.cursor=ClipMath.clamp(changed.starts[index]+source-sequence.clips.get(index).inMs,0,changed.length);
+            applyProject(value,section.equals("transitions")?"Переходы применены. Длительность монтажа: "+ClipMath.clockCode(changed.length):"Эффекты применены к предпросмотру и экспорту проекта.");
         });
     }
     private void removeLayer(boolean overlay) {
@@ -698,7 +716,7 @@ public final class SequenceActivity extends Activity {
         if(sequence.clips.isEmpty()||busy||job.running)return;
         new AlertDialog.Builder(this).setTitle("Render As…")
                 .setMessage("MP4 · H.264 / AAC · до 720p\n"+sequence.clips.size()+" фрагментов · "
-                        +ClipMath.clockCode(sequence.length())+"\n\nТочные границы, эффекты, титры и дополнительные дорожки "
+                        +ClipMath.clockCode(duration())+"\n"+transitionSummary()+"\n\nТочные границы, эффекты, титры и дополнительные дорожки "
                         +"будут сохранены в видео. Исходники могут иметь разные параметры.\n\n"
                         +"Звук исходников: "+(muted?"выключен":"включён"))
                 .setPositiveButton("Render",(dialog,which)->{
@@ -706,6 +724,12 @@ public final class SequenceActivity extends Activity {
                     captureCursor();preview.pause();preview.stopPlayback();previewStopped=true;prepared=false;
                     job.startEdited(this,sequence,effects.copy(),muted);
                 }).setNegativeButton("Отмена",null).show();
+    }
+    private String transitionSummary(){
+        if(effects.transition.equals("none"))return "Переходы: выключены.";
+        if(sequence.clips.size()<2)return "Переход на входе и выходе клипа: "+effects.transition;
+        int overlap=sequence.length()-duration();
+        return "Переходы между клипами: "+effects.transition+" · до "+effects.transitionMs+" мс\nСуммарное перекрытие: "+ClipMath.clockCode(overlap);
     }
     private void showJob() {
         if(progress==null)return;
@@ -749,11 +773,11 @@ public final class SequenceActivity extends Activity {
         catch(Exception error){status("Не удалось сохранить восстановление проекта: "+detail(error));}
     }
     private void captureCursor() {
-        if(prepared&&!previewStopped&&!busy&&!job.running)cursor=ClipMath.clamp(preview.getCurrentPosition(),0,sequence.length());
+        if(prepared&&!previewStopped&&!busy&&!job.running)cursor=ClipMath.clamp(preview.getCurrentPosition(),0,duration());
     }
     private void updateTime() {
         timeline.position(cursor);
-        time.setText(ClipMath.clockCode(cursor)+" / "+ClipMath.clockCode(sequence.length())+"   ·   "+sequence.clips.size()+" events");
+        time.setText(ClipMath.clockCode(cursor)+" / "+ClipMath.clockCode(duration())+"   ·   "+sequence.clips.size()+" events");
     }
     private void updateControls() {
         if(playIcon==null)return;
@@ -787,9 +811,9 @@ public final class SequenceActivity extends Activity {
         if(key==KeyEvent.KEYCODE_FORWARD_DEL||key==KeyEvent.KEYCODE_DEL){delete();return true;}
         if(key==KeyEvent.KEYCODE_SPACE){toggle();return true;}
         if(key==KeyEvent.KEYCODE_DPAD_LEFT){seek(cursor-1000);return true;}
-        if(key==KeyEvent.KEYCODE_DPAD_RIGHT){seek((int)Math.min(sequence.length(),(long)cursor+1000));return true;}
+        if(key==KeyEvent.KEYCODE_DPAD_RIGHT){seek((int)Math.min(duration(),(long)cursor+1000));return true;}
         if(key==KeyEvent.KEYCODE_HOME){seek(0);return true;}
-        if(key==KeyEvent.KEYCODE_MOVE_END){seek(sequence.length());return true;}
+        if(key==KeyEvent.KEYCODE_MOVE_END){seek(duration());return true;}
         return super.onKeyDown(key,event);
     }
     @Override protected void onSaveInstanceState(Bundle out) {

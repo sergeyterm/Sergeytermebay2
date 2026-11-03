@@ -61,7 +61,7 @@ public final class ExportJob {
     public void startEdited(Context owner,Sequence sequence,EffectSpec effects,boolean mute){
         if(running)return;Context context=owner.getApplicationContext();
         EffectSpec settings=(effects==null?new EffectSpec():effects.copy()).normalize();
-        startTransform(context,()->MediaPipeline.composition(context,sequence,settings,mute),sequence==null?0:sequence.length()*1000L,false);
+        startTransform(context,()->MediaPipeline.composition(context,sequence,settings,mute),sequence==null?0:TransitionTiming.lengthMs(sequence,settings)*1000L,false);
     }
     public void startGenerated(Context owner,Uri image,int durationMs){
         if(running)return;Context context=owner.getApplicationContext();

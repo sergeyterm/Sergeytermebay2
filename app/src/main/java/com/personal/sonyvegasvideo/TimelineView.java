@@ -20,6 +20,8 @@ public final class TimelineView extends View {
     public interface Listener {
         void seek(int millis); void editBegin(); void range(int start,int end); void editEnd();
         void mute(); void preciseRange();
+        default void videoMute(){} default void videoSettings(){} default void audioSettings(){}
+        default void opacity(float value){} default void gain(float value){} default void pan(float value){}
     }
     private final Paint p=new Paint(3);
     private final Rect sourceRect=new Rect();
@@ -33,6 +35,7 @@ public final class TimelineView extends View {
     private float lastX;
     private long downTime;
     private boolean muted,hasAudio;
+    private float opacity=1,gain=1,pan;
     private String name="";
     private Bitmap[] frames;
     private float[] waveform;
@@ -53,6 +56,7 @@ public final class TimelineView extends View {
     }
     public void selection(int begin,int finish,boolean mute){start=begin;end=finish;muted=mute;invalidate();}
     public void position(int millis){position=millis;invalidate();}
+    public void levels(float opacity,float gain,float pan){this.opacity=Math.max(0,Math.min(1,opacity));this.gain=Math.max(0,Math.min(1,gain));this.pan=Math.max(-1,Math.min(1,pan));invalidate();}
     public void markers(List<Integer> values){markers.clear();markers.addAll(values);invalidate();}
     public void fit(){offset=0;visible=Math.max(1000,duration>0?duration*1.06:10000);invalidate();}
     public void zoom(float factor){zoom(factor,header()+(getWidth()-header())/2f);}
@@ -115,11 +119,12 @@ public final class TimelineView extends View {
         rect(c,dp(5),y+dp(6),dp(24),y+dp(22),audio?0xff8c5b52:0xff445b83);
         text(c,Integer.toString(index+1),dp(11),y+dp(18),10,Color.WHITE);
         text(c,audio?"Audio":"Video",dp(30),y+dp(18),11,0xff202020);
-        rect(c,h-dp(26),y+dp(5),h-dp(5),y+dp(26),audio&&muted?0xffd7b266:0xffababab);
-        text(c,"M",h-dp(22),y+dp(20),11,audio?0xff252525:0xff6d6d6d);
-        if(rh>dp(48))text(c,audio?(hasAudio?"Vol: 0.0 dB":"Нет аудио"):"Level: 100.0 %",dp(7),y+dp(43),9,0xff292929);
-        if(rh>dp(64))text(c,audio?"Pan: Center":"Compositing: Source",dp(7),y+dp(59),9,0xff363636);
-        if(rh>dp(88)){line(c,dp(9),y+dp(75),h-dp(10),y+dp(75),0xff4e4e4e);rect(c,h*.62f,y+dp(70),h*.62f+dp(7),y+dp(80),0xffd0d0d0);}
+        rect(c,h-dp(26),y+dp(5),h-dp(5),y+dp(26),(audio?muted:opacity==0)?0xffd7b266:0xffababab);
+        text(c,"M",h-dp(22),y+dp(20),11,0xff252525);
+        if(rh>dp(48))text(c,audio?(gain==0?"Vol: −∞ dB":String.format(java.util.Locale.ROOT,"Vol: %.1f dB",20*Math.log10(gain))):"Level: "+Math.round(opacity*100)+" %",dp(7),y+dp(43),9,0xff292929);
+        if(rh>dp(66)){float value=audio?gain:opacity;float thumb=dp(9)+(h-dp(19))*value;line(c,dp(9),y+dp(55),h-dp(10),y+dp(55),0xff4e4e4e);rect(c,thumb-dp(3),y+dp(50),thumb+dp(4),y+dp(60),0xffd0d0d0);}
+        if(rh>dp(86))text(c,audio?"Pan: "+(Math.abs(pan)<.01f?"Center":(pan<0?"L ":"R ")+Math.round(Math.abs(pan)*100)):"Video FX…",dp(7),y+dp(79),9,0xff263d5d);
+        if(audio&&rh>dp(103)){float thumb=dp(9)+(h-dp(19))*(pan+1)/2;line(c,dp(9),y+dp(95),h-dp(10),y+dp(95),0xff4e4e4e);rect(c,thumb-dp(3),y+dp(90),thumb+dp(4),y+dp(100),0xffd0d0d0);}
     }
     private void drawVideo(Canvas c,float y,float height){
         float l=x(0),right=x(duration);
@@ -165,13 +170,21 @@ public final class TimelineView extends View {
     @Override public boolean onTouchEvent(MotionEvent e){
         if(!isEnabled()||duration<=0)return false;
         pinch.onTouchEvent(e);
-        if(e.getPointerCount()>1){if(drag==1||drag==2){if(listener!=null)listener.editEnd();}drag=0;getParent().requestDisallowInterceptTouchEvent(true);return true;}
+        if(e.getPointerCount()>1){if(drag==1||drag==2||drag>=5&&drag<=7){if(listener!=null)listener.editEnd();}drag=0;getParent().requestDisallowInterceptTouchEvent(true);return true;}
         if(pinch.isInProgress())return true;
         float x=e.getX(),y=e.getY(),h=header();
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
                 downTime=System.currentTimeMillis();lastX=x;
-                if(x<h){if(y>ruler()+row()&&y<ruler()+row()+dp(30)&&x>h-dp(34)&&hasAudio&&listener!=null)listener.mute();return true;}
+                if(x<h){
+                    float local=y-ruler();boolean audio=local>=row();if(audio)local-=row();
+                    if(local<0||local>=row())return true;
+                    if(local<dp(30)&&x>h-dp(34)){if(listener!=null){if(audio){if(hasAudio)listener.mute();}else listener.videoMute();}return true;}
+                    if(row()>dp(66)&&local>=dp(45)&&local<=dp(66)){drag=audio?6:5;if(listener!=null)listener.editBegin();headerChange(x);}
+                    else if(audio&&row()>dp(103)&&local>=dp(85)){drag=7;if(listener!=null)listener.editBegin();headerChange(x);}
+                    else drag=audio?9:8;
+                    getParent().requestDisallowInterceptTouchEvent(true);return true;
+                }
                 getParent().requestDisallowInterceptTouchEvent(true);
                 if(y>getHeight()-dp(20)){drag=4;return true;}
                 if(y<ruler()&&Math.abs(x-x(start))<dp(20)&&Math.abs(x-x(start))<=Math.abs(x-x(end))){drag=1;if(listener!=null)listener.editBegin();}
@@ -183,15 +196,19 @@ public final class TimelineView extends View {
                 else if(drag==2&&listener!=null)listener.range(start,Math.max(time(x),start+1));
                 else if(drag==3&&listener!=null)listener.seek(time(x));
                 else if(drag==4){offset=Math.max(0,Math.min(Math.max(0,duration-visible),offset+(x-lastX)/Math.max(1,getWidth()-h)*duration));invalidate();}
+                else if(drag>=5&&drag<=7)headerChange(x);
                 lastX=x;return true;
             case MotionEvent.ACTION_UP:
-                if((drag==1||drag==2)&&listener!=null)listener.editEnd();
+                if((drag==1||drag==2||drag>=5&&drag<=7)&&listener!=null)listener.editEnd();
+                else if(drag==8&&listener!=null)listener.videoSettings();
+                else if(drag==9&&listener!=null)listener.audioSettings();
                 else if(drag==3&&System.currentTimeMillis()-downTime>650&&listener!=null)listener.preciseRange();
                 drag=0;getParent().requestDisallowInterceptTouchEvent(false);performClick();return true;
             case MotionEvent.ACTION_CANCEL:
-                if((drag==1||drag==2)&&listener!=null)listener.editEnd();drag=0;getParent().requestDisallowInterceptTouchEvent(false);return true;
+                if((drag==1||drag==2||drag>=5&&drag<=7)&&listener!=null)listener.editEnd();drag=0;getParent().requestDisallowInterceptTouchEvent(false);return true;
         }
         return true;
     }
     @Override public boolean performClick(){super.performClick();return true;}
+    private void headerChange(float x){if(listener==null)return;float value=Math.max(0,Math.min(1,(x-dp(9))/Math.max(1,header()-dp(19))));if(drag==5)listener.opacity(value);else if(drag==6)listener.gain(value);else if(drag==7)listener.pan(value*2-1);}
 }

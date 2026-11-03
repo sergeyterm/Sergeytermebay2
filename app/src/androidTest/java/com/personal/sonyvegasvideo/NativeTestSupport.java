@@ -34,7 +34,7 @@ final class NativeTestSupport implements AutoCloseable {
     final Context context;
     private final List<Uri> owned=new ArrayList<>();
     private final String prefix="VegasQA_"+System.currentTimeMillis()+"_";
-    NativeTestSupport(Instrumentation test){this.test=test;context=test.getTargetContext();}
+    NativeTestSupport(Instrumentation test){this.test=test;context=test.getTargetContext();android.accessibilityservice.AccessibilityServiceInfo info=test.getUiAutomation().getServiceInfo();if(info!=null){info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS|android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;test.getUiAutomation().setServiceInfo(info);}}
     void step(String message){Bundle status=new Bundle();status.putString("stream","QA: "+message+"\n");test.sendStatus(1,status);}
     static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
     <T>T main(Callable<T> action){
@@ -82,25 +82,29 @@ final class NativeTestSupport implements AutoCloseable {
         Intent result=new Intent().setData(response).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         return test.addMonitor(filter,new Instrumentation.ActivityResult(Activity.RESULT_OK,result),true);
     }
-    void picked(Instrumentation.ActivityMonitor monitor){await(()->monitor.getHits()>0,5000,"Document picker was not launched");test.removeMonitor(monitor);test.waitForIdleSync();}
-    void click(View view){require(view!=null,"Missing native control");main(()->{require(view.isEnabled(),"Control disabled: "+view.getContentDescription());require(view.performClick(),"Control has no click handler: "+view.getContentDescription());return null;});test.waitForIdleSync();}
+    void picked(Instrumentation.ActivityMonitor monitor){await(()->monitor.getHits()>0,5000,"Document picker was not launched");test.removeMonitor(monitor);settle();}
+    void settle(){test.waitForIdleSync();try{test.getUiAutomation().waitForIdle(150,2000);}catch(java.util.concurrent.TimeoutException continuouslyUpdating){/* State-specific bounded waits still decide each assertion. */}}
+    void click(View view){require(view!=null,"Missing native control");main(()->{require(view.isEnabled(),"Control disabled: "+view.getContentDescription());view.requestRectangleOnScreen(new android.graphics.Rect(0,0,view.getWidth(),view.getHeight()),true);return null;});test.waitForIdleSync();main(()->{require(view.performClick(),"Control has no click handler: "+view.getContentDescription());return null;});settle();}
     void clickDescription(Activity activity,String description){View view=main(()->findDescription(activity.getWindow().getDecorView(),description));require(view!=null,"Missing control "+description);click(view);}
     void clickText(Activity activity,String text){View view=main(()->findText(activity.getWindow().getDecorView(),text));require(view!=null,"Missing text control "+text);click(view);}
     boolean hasText(String value){return node(value,false)!=null;}
+    void menuReady(String expectedItem){await(()->hasText(expectedItem),8000,"Menu did not expose item "+expectedItem);}
     void windowClick(String value){
         await(()->node(value,false)!=null,5000,"Missing window item "+value);AccessibilityNodeInfo item=node(value,false);
-        for(int i=0;i<6&&item!=null;i++,item=item.getParent())if(item.isClickable()){require(item.performAction(AccessibilityNodeInfo.ACTION_CLICK),"Window click failed: "+value);test.waitForIdleSync();return;}
+        for(int i=0;i<6&&item!=null;i++,item=item.getParent())if(item.isClickable()){require(item.performAction(AccessibilityNodeInfo.ACTION_CLICK),"Window click failed: "+value);settle();return;}
         throw new AssertionError("Window item is not clickable: "+value+"\n"+windowText());
     }
     void setField(String description,String value){
         AccessibilityNodeInfo item=node(description,true);require(item!=null,"Missing field "+description);Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);require(item.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args),"Cannot set field "+description);test.waitForIdleSync();
     }
+    void windowDescriptionClick(String description){await(()->node(description,true)!=null,5000,"Missing dialog action "+description);AccessibilityNodeInfo item=node(description,true);require(item.isEnabled()&&item.performAction(AccessibilityNodeInfo.ACTION_CLICK),"Cannot click dialog action "+description);settle();}
+    void setProgressField(String description,float value){AccessibilityNodeInfo item=node(description,true);require(item!=null,"Missing slider "+description);Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,value);require(item.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(),args),"Cannot adjust slider "+description);settle();}
     void setEditable(int index,String value){
         List<AccessibilityNodeInfo> nodes=new ArrayList<>();collectEditable(test.getUiAutomation().getRootInActiveWindow(),nodes);require(index<nodes.size(),"Missing editable #"+index+" "+windowText());
         Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);require(nodes.get(index).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args),"Cannot edit field #"+index);test.waitForIdleSync();
     }
-    void back(){test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);test.waitForIdleSync();}
-    void dismissIfPresent(String value){if(hasText(value))windowClick(value);}
+    void back(){test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);settle();}
+    void dismissIfPresent(String value){settle();if(hasText(value))windowClick(value);}
     void screenshot(String name)throws Exception{
         Bitmap image=test.getUiAutomation().takeScreenshot();require(image!=null,"Screenshot unavailable");File out=new File(context.getFilesDir(),name+".png");
         try(FileOutputStream stream=new FileOutputStream(out)){image.compress(Bitmap.CompressFormat.PNG,100,stream);}finally{image.recycle();}
@@ -109,9 +113,10 @@ final class NativeTestSupport implements AutoCloseable {
     static View findText(View view,String value){if(view instanceof TextView&&value.contentEquals(((TextView)view).getText()))return view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),value);if(found!=null)return found;}}return null;}
     static TextView textPrefix(View view,String value){if(view instanceof TextView&&((TextView)view).getText().toString().startsWith(value))return (TextView)view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){TextView found=textPrefix(group.getChildAt(i),value);if(found!=null)return found;}}return null;}
     static <T>T findClass(View view,Class<T> type){if(type.isInstance(view))return type.cast(view);if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){T found=findClass(group.getChildAt(i),type);if(found!=null)return found;}}return null;}
-    String windowText(){StringBuilder out=new StringBuilder();collectText(test.getUiAutomation().getRootInActiveWindow(),out,0);return out.toString();}
-    private AccessibilityNodeInfo node(String value,boolean description){return findNode(test.getUiAutomation().getRootInActiveWindow(),value,description);}
-    private static AccessibilityNodeInfo findNode(AccessibilityNodeInfo node,String value,boolean description){if(node==null)return null;CharSequence text=description?node.getContentDescription():node.getText();if(text!=null&&value.contentEquals(text))return node;for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo found=findNode(node.getChild(i),value,description);if(found!=null)return found;}return null;}
+    String windowText(){StringBuilder out=new StringBuilder();collectText(activeRoot(),out,0);return out.toString();}
+    private AccessibilityNodeInfo activeRoot(){AccessibilityNodeInfo root=test.getUiAutomation().getRootInActiveWindow();if(root!=null)return root;for(android.view.accessibility.AccessibilityWindowInfo window:test.getUiAutomation().getWindows())if(window.isActive()||window.isFocused()){root=window.getRoot();if(root!=null)return root;}return null;}
+    private AccessibilityNodeInfo node(String value,boolean description){return findNode(activeRoot(),value,description);}
+    private static AccessibilityNodeInfo findNode(AccessibilityNodeInfo node,String value,boolean description){if(node==null)return null;CharSequence text=description?node.getContentDescription():node.getText();if(text!=null&&(description?value.contentEquals(text):value.trim().equalsIgnoreCase(text.toString().trim())))return node;for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo found=findNode(node.getChild(i),value,description);if(found!=null)return found;}return null;}
     private static void collectText(AccessibilityNodeInfo node,StringBuilder out,int depth){if(node==null||depth>25||out.length()>7000)return;if(node.getText()!=null)out.append(node.getText()).append(" | ");for(int i=0;i<node.getChildCount();i++)collectText(node.getChild(i),out,depth+1);}
     private static void collectEditable(AccessibilityNodeInfo node,List<AccessibilityNodeInfo> out){if(node==null)return;if(node.isEditable())out.add(node);for(int i=0;i<node.getChildCount();i++)collectEditable(node.getChild(i),out);}
     Set<String> movieRows(){

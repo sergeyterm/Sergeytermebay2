@@ -67,6 +67,42 @@ final class EditedExportChecks {
             check(mean(first,0)<mid*.8,"Transition has no entry animation: "+transition);
             check(mean(last,0)<mid*.85,"Transition has no exit animation: "+transition);first.recycle();middle.recycle();last.recycle();
         }
+        step("true cross-clip overlap duration, image continuity and mixed pixels");
+        Sequence redBlue=one(red,0,1000).append(new Sequence.Clip(blue.toString(),"blue",0,1000));
+        for(String transition:new String[]{"dissolve","cross","wipe","cascade"}){
+            EffectSpec effect=new EffectSpec();effect.transition=transition;effect.transitionMs=400;Uri out=render(redBlue,effect,true);
+            check(duration(out)>=1530&&duration(out)<=1700,"Cross-clip overlap did not shorten the timeline: "+transition+" "+duration(out));
+            Bitmap earlyClip=frame(out,300_000),overlap=frame(out,800_000),lateClip=frame(out,1_300_000);
+            double[] earlyRgb=rgb(earlyClip,.5,.5),lateRgb=rgb(lateClip,.5,.5);
+            check(earlyRgb[0]>.7&&earlyRgb[2]<.2,"Cross-clip transition damaged the outgoing clip before overlap: "+transition);
+            check(lateRgb[2]>.7&&lateRgb[0]<.2,"Cross-clip transition failed to reveal incoming clip: "+transition);
+            if(transition.equals("dissolve")){double[] middleRgb=rgb(overlap,.5,.5);check(middleRgb[0]>.25&&middleRgb[2]>.25&&middleRgb[1]<.2,"Dissolve did not blend the two source images");}
+            else {check(colorFraction(overlap,true)>.03&&colorFraction(overlap,false)>.03,"Cross-clip "+transition+" did not show both source colors during overlap");}
+            check(blackFraction(overlap)<.08,"Cross-clip "+transition+" faded through black instead of the other clip");
+            saveFrame(overlap,"effect-between-"+transition+".png");earlyClip.recycle();overlap.recycle();lateClip.recycle();
+        }
+        step("third clip transition uses its nonzero project origin");
+        EffectSpec thirdTransition=new EffectSpec();thirdTransition.transition="dissolve";thirdTransition.transitionMs=400;
+        Uri three=render(redBlue.append(new Sequence.Clip(red.toString(),"red again",0,1000)),thirdTransition,true);
+        check(duration(three)>=2130&&duration(three)<=2300,"Three-clip overlaps did not shorten both boundaries");
+        Bitmap secondBlend=frame(three,1_400_000),thirdEnd=frame(three,1_950_000);double[] secondRgb=rgb(secondBlend,.5,.5),thirdRgb=rgb(thirdEnd,.5,.5);
+        check(secondRgb[0]>.25&&secondRgb[2]>.25&&secondRgb[1]<.2,"Second transition ignored its nonzero timeline origin");
+        check(thirdRgb[0]>.7&&thirdRgb[2]<.2,"Third clip was not fully revealed after its transition");saveFrame(secondBlend,"effect-between-third.png");secondBlend.recycle();thirdEnd.recycle();
+        step("audio crossfade ramps both source tones through the overlap");
+        EffectSpec audioTransition=new EffectSpec();audioTransition.transition="dissolve";audioTransition.transitionMs=400;
+        Uri faded=render(one(source,0,1000).append(new Sequence.Clip(different.toString(),"880 Hz",0,1000)),audioTransition,false);
+        double[] bands=bandLevels(faded);double outgoing=bands[0],incoming=bands[7];
+        check(outgoing>.005&&incoming>.005,"Crossfade output lost a source tone");
+        check(bands[1]<outgoing*.35&&bands[6]<incoming*.35,"Crossfade source timing does not match the non-overlap sections");
+        double incomingEarly=bands[3]/incoming,outgoingLate=bands[4]/outgoing;
+        check(incomingEarly>.02&&incomingEarly<.70,"Incoming audio did not fade in smoothly: "+incomingEarly);
+        check(outgoingLate>.02&&outgoingLate<.70,"Outgoing audio did not fade out smoothly: "+outgoingLate);
+        check(bands[2]>outgoing*.5&&bands[5]>incoming*.5,"Audio crossfade dropped both source tracks too early");
+        step("video opacity changes encoded image intensity");EffectSpec translucent=new EffectSpec();translucent.videoOpacity=.5f;
+        Uri half=render(one(red,0,1000),translucent,true);Bitmap halfFrame=frame(half,500_000);check(mean(halfFrame,0)>.3&&mean(halfFrame,0)<.9,"Video opacity was ignored or removed the entire image");halfFrame.recycle();
+        step("audio pan routes sound independently to left and right channels");
+        EffectSpec leftPan=new EffectSpec();leftPan.audioPan=-1;Uri left=render(one(source,137,1137),leftPan,false);double ll=rmsForChannel(left,0),lr=rmsForChannel(left,1);check(ll>.005&&ll>lr*6,"Left pan did not route sound to the left channel");
+        EffectSpec rightPan=new EffectSpec();rightPan.audioPan=1;Uri right=render(one(source,137,1137),rightPan,false);double rl=rmsForChannel(right,0),rr=rmsForChannel(right,1);check(rr>.005&&rr>rl*6,"Right pan did not route sound to the right channel");
 
         step("text overlay is visible in encoded output");EffectSpec title=new EffectSpec();title.title="VEGAS QA";title.titleSize=.18f;title.titleY=0;
         Uri titled=render(one(red,0,1000),title,true);Bitmap titleFrame=frame(titled,500_000);check(whiteFraction(titleFrame)>.002,"Text overlay missing from encoded video");saveFrame(titleFrame,"effect-title.png");titleFrame.recycle();
@@ -126,7 +162,8 @@ final class EditedExportChecks {
     private Bitmap frame(Uri uri,long at)throws Exception{MediaMetadataRetriever reader=new MediaMetadataRetriever();try{reader.setDataSource(s.context,uri);Bitmap frame=reader.getScaledFrameAtTime(at,MediaMetadataRetriever.OPTION_CLOSEST,200,200);check(frame!=null,"Cannot decode edited video at "+at);return frame;}finally{reader.release();}}
     private void saveFrame(Bitmap bitmap,String name)throws Exception{try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(s.context.getFilesDir(),name))){bitmap.compress(Bitmap.CompressFormat.PNG,100,out);}}
     private int audioTracks(Uri uri)throws Exception{MediaExtractor extractor=new MediaExtractor();try{extractor.setDataSource(s.context,uri,null);int count=0,video=0;for(int i=0;i<extractor.getTrackCount();i++){String mime=extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME);if(mime.startsWith("audio/"))count++;else if(mime.startsWith("video/"))video++;}check(video==1,"Export does not contain one video track");return count;}finally{extractor.release();}}
-    private double rms(Uri uri)throws Exception{
+    private double rms(Uri uri)throws Exception{return rmsForChannel(uri,-1);}
+    private double rmsForChannel(Uri uri,int selectedChannel)throws Exception{
         MediaExtractor extractor=new MediaExtractor();MediaCodec decoder=null;
         try{
             extractor.setDataSource(s.context,uri,null);int audio=-1;for(int i=0;i<extractor.getTrackCount();i++){String mime=extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME);if(mime.startsWith("audio/")){audio=i;break;}}
@@ -136,14 +173,32 @@ final class EditedExportChecks {
                 if(!inputDone){int index=decoder.dequeueInputBuffer(1000);if(index>=0){ByteBuffer input=decoder.getInputBuffer(index);input.clear();int size=extractor.readSampleData(input,0);if(size<0){decoder.queueInputBuffer(index,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM);inputDone=true;}else{decoder.queueInputBuffer(index,0,size,extractor.getSampleTime(),0);extractor.advance();}}}
                 int index=decoder.dequeueOutputBuffer(info,1000);
                 if(index==MediaCodec.INFO_OUTPUT_FORMAT_CHANGED){MediaFormat output=decoder.getOutputFormat();channels=output.getInteger(MediaFormat.KEY_CHANNEL_COUNT);rate=output.getInteger(MediaFormat.KEY_SAMPLE_RATE);encoding=output.containsKey(MediaFormat.KEY_PCM_ENCODING)?output.getInteger(MediaFormat.KEY_PCM_ENCODING):AudioFormat.ENCODING_PCM_16BIT;}
-                else if(index>=0){ByteBuffer output=decoder.getOutputBuffer(index);if(output!=null&&info.size>0){ByteBuffer pcm=output.duplicate().order(ByteOrder.LITTLE_ENDIAN);pcm.position(info.offset);pcm.limit(info.offset+info.size);int bytes=encoding==AudioFormat.ENCODING_PCM_FLOAT?4:2;check(encoding==AudioFormat.ENCODING_PCM_FLOAT||encoding==AudioFormat.ENCODING_PCM_16BIT,"Unsupported PCM measurement format");int samples=pcm.remaining()/bytes;for(int i=0;i<samples;i++){float value=bytes==4?pcm.getFloat():pcm.getShort()/32768f;long pts=info.presentationTimeUs+(long)(i/channels)*1_000_000/rate;if(pts>=100_000&&pts<600_000){sum+=(double)value*value;count++;}}}done=(info.flags&MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0||info.presentationTimeUs>650_000;decoder.releaseOutputBuffer(index,false);}
+                    else if(index>=0){ByteBuffer output=decoder.getOutputBuffer(index);if(output!=null&&info.size>0){ByteBuffer pcm=output.duplicate().order(ByteOrder.LITTLE_ENDIAN);pcm.position(info.offset);pcm.limit(info.offset+info.size);int bytes=encoding==AudioFormat.ENCODING_PCM_FLOAT?4:2;check(encoding==AudioFormat.ENCODING_PCM_FLOAT||encoding==AudioFormat.ENCODING_PCM_16BIT,"Unsupported PCM measurement format");if(selectedChannel>=0)check(channels>selectedChannel,"Panned output did not contain both stereo channels");int samples=pcm.remaining()/bytes;for(int i=0;i<samples;i++){float value=bytes==4?pcm.getFloat():pcm.getShort()/32768f;long pts=info.presentationTimeUs+(long)(i/channels)*1_000_000/rate;if(pts>=100_000&&pts<600_000&&(selectedChannel<0||i%channels==selectedChannel)){sum+=(double)value*value;count++;}}}done=(info.flags&MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0||info.presentationTimeUs>650_000;decoder.releaseOutputBuffer(index,false);}
             }
             check(count>1000,"Decoded too little audio for measurement: "+count);return Math.sqrt(sum/count);
+        }finally{if(decoder!=null){try{decoder.stop();}catch(RuntimeException ignored){}decoder.release();}extractor.release();}
+    }
+    private double[] bandLevels(Uri uri)throws Exception{
+        MediaExtractor extractor=new MediaExtractor();MediaCodec decoder=null;
+        try{
+            extractor.setDataSource(s.context,uri,null);int audio=-1;for(int i=0;i<extractor.getTrackCount();i++)if(extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME).startsWith("audio/")){audio=i;break;}
+            check(audio>=0,"Crossfade has no audio track");extractor.selectTrack(audio);MediaFormat format=extractor.getTrackFormat(audio);decoder=MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME));decoder.configure(format,null,null,0);decoder.start();
+            long[] starts={100_000,620_000,900_000,1_200_000},ends={400_000,700_000,980_000,1_500_000},counts=new long[4];double[] cosine=new double[8],sine=new double[8];double[] frequencies={440,880};
+            boolean inputDone=false,done=false;int encoding=AudioFormat.ENCODING_PCM_16BIT,channels=format.getInteger(MediaFormat.KEY_CHANNEL_COUNT),rate=format.getInteger(MediaFormat.KEY_SAMPLE_RATE);long limit=SystemClock.uptimeMillis()+20000;MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
+            while(!done&&SystemClock.uptimeMillis()<limit){
+                if(!inputDone){int index=decoder.dequeueInputBuffer(1000);if(index>=0){ByteBuffer input=decoder.getInputBuffer(index);input.clear();int bytes=extractor.readSampleData(input,0);if(bytes<0){decoder.queueInputBuffer(index,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM);inputDone=true;}else{decoder.queueInputBuffer(index,0,bytes,extractor.getSampleTime(),0);extractor.advance();}}}
+                int index=decoder.dequeueOutputBuffer(info,1000);
+                if(index==MediaCodec.INFO_OUTPUT_FORMAT_CHANGED){MediaFormat out=decoder.getOutputFormat();channels=out.getInteger(MediaFormat.KEY_CHANNEL_COUNT);rate=out.getInteger(MediaFormat.KEY_SAMPLE_RATE);encoding=out.containsKey(MediaFormat.KEY_PCM_ENCODING)?out.getInteger(MediaFormat.KEY_PCM_ENCODING):AudioFormat.ENCODING_PCM_16BIT;}
+                else if(index>=0){ByteBuffer output=decoder.getOutputBuffer(index);if(output!=null&&info.size>0){ByteBuffer pcm=output.duplicate().order(ByteOrder.LITTLE_ENDIAN);pcm.position(info.offset);pcm.limit(info.offset+info.size);int bytes=encoding==AudioFormat.ENCODING_PCM_FLOAT?4:2;check(encoding==AudioFormat.ENCODING_PCM_FLOAT||encoding==AudioFormat.ENCODING_PCM_16BIT,"Unsupported crossfade PCM format");int samples=pcm.remaining()/bytes;for(int i=0;i<samples;i++){float sample=bytes==4?pcm.getFloat():pcm.getShort()/32768f;if(i%channels!=0)continue;long pts=info.presentationTimeUs+(long)(i/channels)*1_000_000/rate;for(int window=0;window<starts.length;window++)if(pts>=starts[window]&&pts<ends[window]){counts[window]++;for(int frequency=0;frequency<2;frequency++){double angle=2*Math.PI*frequencies[frequency]*pts/1_000_000;int at=window*2+frequency;cosine[at]+=sample*Math.cos(angle);sine[at]+=sample*Math.sin(angle);}}}}done=(info.flags&MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0||info.presentationTimeUs>1_550_000;decoder.releaseOutputBuffer(index,false);}
+            }
+            double[] levels=new double[8];for(int window=0;window<4;window++){check(counts[window]>1000,"Crossfade analysis window is missing audio: "+window);for(int frequency=0;frequency<2;frequency++){int at=window*2+frequency;levels[at]=Math.hypot(cosine[at],sine[at])/counts[window];}}return levels;
         }finally{if(decoder!=null){try{decoder.stop();}catch(RuntimeException ignored){}decoder.release();}extractor.release();}
     }
     private static double[] rgb(Bitmap image,double x,double y){int color=image.getPixel(Math.max(0,Math.min(image.getWidth()-1,(int)(image.getWidth()*x))),Math.max(0,Math.min(image.getHeight()-1,(int)(image.getHeight()*y))));return new double[]{Color.red(color)/255d,Color.green(color)/255d,Color.blue(color)/255d};}
     private static double mean(Bitmap image,int channel){double total=0;int count=0;for(int y=0;y<image.getHeight();y+=2)for(int x=0;x<image.getWidth();x+=2){int color=image.getPixel(x,y);total+=channel==0?Color.red(color):channel==1?Color.green(color):Color.blue(color);count++;}return total/count/255;}
     private static double edgeEnergy(Bitmap image){double sum=0;int n=0;for(int y=1;y<image.getHeight();y+=2)for(int x=1;x<image.getWidth();x+=2){int a=image.getPixel(x,y),b=image.getPixel(x-1,y),c=image.getPixel(x,y-1);sum+=Math.abs(Color.red(a)-Color.red(b))+Math.abs(Color.green(a)-Color.green(b))+Math.abs(Color.blue(a)-Color.blue(b))+Math.abs(Color.red(a)-Color.red(c))+Math.abs(Color.green(a)-Color.green(c))+Math.abs(Color.blue(a)-Color.blue(c));n+=6;}return sum/Math.max(1,n);}
     private static double whiteFraction(Bitmap image){int white=0,total=0;for(int y=0;y<image.getHeight();y++)for(int x=0;x<image.getWidth();x++){int pixel=image.getPixel(x,y);if(Color.red(pixel)>200&&Color.green(pixel)>200&&Color.blue(pixel)>200)white++;total++;}return (double)white/total;}
+    private static double colorFraction(Bitmap image,boolean red){int count=0,total=0;for(int y=0;y<image.getHeight();y++)for(int x=0;x<image.getWidth();x++){int pixel=image.getPixel(x,y),r=Color.red(pixel),b=Color.blue(pixel);if(red?r>80&&r>b*1.5:b>80&&b>r*1.5)count++;total++;}return (double)count/total;}
+    private static double blackFraction(Bitmap image){int count=0,total=0;for(int y=0;y<image.getHeight();y++)for(int x=0;x<image.getWidth();x++){int pixel=image.getPixel(x,y);if(Math.max(Color.red(pixel),Math.max(Color.green(pixel),Color.blue(pixel)))<35)count++;total++;}return (double)count/total;}
     private static int distinctPixels(Bitmap image){java.util.Set<Integer> colors=new java.util.HashSet<>();for(int y=0;y<image.getHeight();y+=3)for(int x=0;x<image.getWidth();x+=3){colors.add(image.getPixel(x,y));if(colors.size()>32)return colors.size();}return colors.size();}
 }

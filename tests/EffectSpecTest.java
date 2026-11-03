@@ -25,6 +25,9 @@ public final class EffectSpecTest {
         for(String transition:new String[]{"none","dissolve","cross","wipe","cascade"}){EffectSpec spec=clean.copy();spec.transition=transition;check(spec.normalize().transition.equals(transition));}
         EffectSpec title=clean.copy();title.title="Hello";check(!title.isIdentity());check(clean.isIdentity());title.copy().normalize().title="Changed";check(title.title.equals("Hello"));
         EffectSpec latent=clean.copy();latent.transitionMs=1500;latent.chromaThreshold=.6f;check(latent.isIdentity());
+        EffectSpec mix=clean.copy();mix.videoOpacity=Float.NaN;mix.audioPan=7;mix.normalize();check(mix.videoOpacity==1&&mix.audioPan==1);
+        mix.videoOpacity=-3;mix.audioPan=-9;mix.normalize();check(mix.videoOpacity==0&&mix.audioPan==-1);check(!mix.isIdentity());
+        mix=clean.copy();mix.audioPan=Float.POSITIVE_INFINITY;mix.normalize();check(mix.audioPan==0&&mix.isIdentity());
         System.out.println("EffectSpecTest OK: "+checks+" checks");
     }
     private static void check(boolean valid){checks++;if(!valid)throw new AssertionError("EffectSpec check "+checks);}

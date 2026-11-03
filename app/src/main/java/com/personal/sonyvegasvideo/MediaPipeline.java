@@ -64,7 +64,8 @@ public final class MediaPipeline {
         if(sequence==null||sequence.clips.isEmpty())throw new IOException("Проект пуст. Импортируйте видео.");
         EffectSpec spec=(settings==null?new EffectSpec():settings.copy()).normalize();
         if(!Float.isFinite(speed)||speed<=0)throw new IOException("Некорректная скорость предпросмотра.");
-        if(speed!=1f&&(!spec.audioUri.isEmpty()||!spec.overlayUri.isEmpty()))throw new IOException("С музыкой и видеослоем предпросмотр доступен на скорости 1×.");
+        boolean crossClips=sequence.clips.size()>1&&!spec.transition.equals("none");
+        if(speed!=1f&&(!spec.audioUri.isEmpty()||!spec.overlayUri.isEmpty()||crossClips))throw new IOException("Со слоями и переходами между фрагментами предпросмотр доступен на скорости 1×.");
         Map<String,Source> sources=new HashMap<>();boolean sourceAudio=false;Source first=null;
         for(Sequence.Clip clip:sequence.clips){
             Source input=sources.get(clip.source);
@@ -74,16 +75,41 @@ public final class MediaPipeline {
             sourceAudio|=input.audio;
         }
         final int[] output=outputSize(first.width,first.height);
-        List<EditedMediaItem> videos=new ArrayList<>();
-        for(Sequence.Clip clip:sequence.clips){
-            Source input=sources.get(clip.source);long endUs=Math.min(clip.outMs*1000L,input.durationUs);
-            videos.add(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,endUs,muted,false,audioProcessors(1f,true),
-                    Collections.singletonList(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT)),speed));
-        }
+        final TransitionTiming timing=new TransitionTiming(sequence,spec);
         boolean hasMusic=!spec.audioUri.isEmpty(),pip=!spec.overlayUri.isEmpty();
-        EditedMediaItemSequence base=new EditedMediaItemSequence.Builder(videos)
-                .experimentalSetForceAudioTrack((sourceAudio&&!muted)||hasMusic||speed!=1f).build();
-        List<EditedMediaItemSequence> sequences=new ArrayList<>();final long totalUs=sequence.length()*1000L;
+        boolean forceAudio=(sourceAudio&&!muted)||hasMusic||speed!=1f;
+        List<EditedMediaItemSequence> bases=new ArrayList<>();
+        final long totalUs=timing.length*1000L;
+        if(crossClips){
+            for(int lane=0;lane<2;lane++){
+                EditedMediaItemSequence.Builder events=new EditedMediaItemSequence.Builder();long positionUs=0;
+                for(int i=lane;i<sequence.clips.size();i+=2){
+                    Sequence.Clip clip=sequence.clips.get(i);Source input=sources.get(clip.source);
+                    long startUs=timing.starts[i]*1000L,lengthUs=clip.length()*1000L;
+                    long fadeInUs=i>0?timing.overlaps[i-1]*1000L:0,fadeOutUs=i<timing.overlaps.length?timing.overlaps[i]*1000L:0;
+                    if(startUs>positionUs)events.addGap(startUs-positionUs);
+                    List<Effect> video=new ArrayList<>();video.add(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT));
+                    // Front/even clips fade in/out over the fully visible moving back/odd clip.
+                    // Internal effects receive project timestamps after Media3 adds the event offset.
+                    if(lane==0)video.add(VideoEffects.transitionMask(spec,lengthUs,fadeInUs,fadeOutUs,startUs));
+                    List<AudioProcessor> audio=new ArrayList<>(audioProcessors(1f,true));
+                    if(fadeInUs>0||fadeOutUs>0)audio.add(new AudioFadeProcessor(lengthUs,fadeInUs,fadeOutUs,startUs));
+                    events.addItem(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,Math.min(clip.outMs*1000L,input.durationUs),muted,false,audio,video,1f));
+                    positionUs=timing.ends[i]*1000L;
+                }
+                if(positionUs<totalUs)events.addGap(totalUs-positionUs);
+                bases.add(events.experimentalSetForceVideoTrack(true).experimentalSetForceAudioTrack(forceAudio).build());
+            }
+        }else{
+            List<EditedMediaItem> videos=new ArrayList<>();
+            for(Sequence.Clip clip:sequence.clips){
+                Source input=sources.get(clip.source);long endUs=Math.min(clip.outMs*1000L,input.durationUs);
+                videos.add(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,endUs,muted,false,audioProcessors(1f,true),
+                        Collections.singletonList(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT)),speed));
+            }
+            bases.add(new EditedMediaItemSequence.Builder(videos).experimentalSetForceAudioTrack(forceAudio).build());
+        }
+        List<EditedMediaItemSequence> sequences=new ArrayList<>();
         if(pip){
             Uri overlay=Uri.parse(spec.overlayUri);Source source=inspect(context,overlay,true,false);
             long count=(totalUs+source.durationUs-1)/source.durationUs;
@@ -96,21 +122,25 @@ public final class MediaPipeline {
             // a full-length primary timeline; primary looping is unsupported in Media3 1.8.
             sequences.add(new EditedMediaItemSequence.Builder(repeated).build());
         }
-        sequences.add(base);
+        sequences.addAll(bases);
         if(hasMusic){
             Uri audio=Uri.parse(spec.audioUri);Source source=inspect(context,audio,false,true);
             EditedMediaItem music=item(audio,source.durationUs,0,source.durationUs,false,true,audioProcessors(spec.audioGain,true),Collections.emptyList(),1f);
             sequences.add(new EditedMediaItemSequence.Builder(music).setIsLooping(true).build());
         }
-        EffectSpec visual=spec.copy();if(pip)visual.chromaKey=false;
+        EffectSpec visual=spec.copy();if(pip)visual.chromaKey=false;if(crossClips)visual.transition="none";
         List<Effect> effects=new ArrayList<>(VideoEffects.create(visual,(long)((effectDurationUs>0?effectDurationUs:totalUs)/speed),(long)(effectOriginUs/speed)));
         effects.add(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT));
-        Composition.Builder builder=new Composition.Builder(sequences).setEffects(new Effects(audioProcessors(spec.masterGain,false),effects))
+        Composition.Builder builder=new Composition.Builder(sequences).setEffects(new Effects(audioProcessors(spec.masterGain,false,spec.audioPan),effects))
                 .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL);
-        if(pip)builder.setVideoCompositorSettings(new VideoCompositorSettings(){
+        if(pip||crossClips)builder.setVideoCompositorSettings(new VideoCompositorSettings(){
                     @Override public Size getOutputSize(List<Size> sizes){return new Size(output[0],output[1]);}
                     @Override public OverlaySettings getOverlaySettings(int inputId,long timeUs){
                         if(pip&&inputId==0)return new StaticOverlaySettings.Builder().setScale(spec.overlayScale,spec.overlayScale).setBackgroundFrameAnchor(spec.overlayX,spec.overlayY).build();
+                        if(crossClips){
+                            int lane=inputId-(pip?1:0);
+                            if(lane==0||lane==1)return new StaticOverlaySettings.Builder().setAlphaScale(activeLane(timing,lane,timeUs)?1:0).build();
+                        }
                         return new StaticOverlaySettings.Builder().build();
                     }
                 });
@@ -135,18 +165,31 @@ public final class MediaPipeline {
         return new EditedMediaItem.Builder(media).setDurationUs(durationUs).setRemoveAudio(removeAudio).setRemoveVideo(removeVideo).setEffects(new Effects(processors,visual)).build();
     }
     private static List<AudioProcessor> audioProcessors(float gain,boolean stereo){
-        if(gain==1f&&!stereo)return Collections.emptyList();ChannelMixingAudioProcessor processor=new ChannelMixingAudioProcessor();
+        return audioProcessors(gain,stereo,0);
+    }
+    private static List<AudioProcessor> audioProcessors(float gain,boolean stereo,float pan){
+        if(gain==1f&&!stereo&&pan==0)return Collections.emptyList();ChannelMixingAudioProcessor processor=new ChannelMixingAudioProcessor();
         for(int channels=1;channels<=8;channels++){
-            int output=stereo?2:channels;float[] values=new float[channels*output];
-            if(!stereo||channels==2){for(int i=0;i<channels;i++)values[i*output+i]=gain;}
+            int output=stereo||pan!=0?2:channels;float[] values=new float[channels*output];
+            if(output==channels){for(int i=0;i<channels;i++)values[i*output+i]=gain;}
             else if(channels==1){values[0]=values[1]=gain;}
             else{
-                for(int i=0;i<channels;i++){if(i<2)values[i*2+i]=gain;else if(i==2||i==3){values[i*2]=values[i*2+1]=gain*(i==2?.7071f:.5f);}else values[i*2+(i%2)]=gain*.7071f;}
-                float left=0,right=0;for(int i=0;i<channels;i++){left+=values[i*2];right+=values[i*2+1];}float normal=Math.max(1f,Math.max(left,right));for(int i=0;i<values.length;i++)values[i]/=normal;
+                for(int i=0;i<channels;i++){if(i<2)values[i*2+i]=1;else if(i==2||i==3){values[i*2]=values[i*2+1]=i==2?.7071f:.5f;}else values[i*2+(i%2)]=.7071f;}
+                float left=0,right=0;for(int i=0;i<channels;i++){left+=values[i*2];right+=values[i*2+1];}float normal=Math.max(1f,Math.max(left,right));for(int i=0;i<values.length;i++)values[i]*=gain/normal;
             }
+            if(pan!=0&&output>=2)for(int i=0;i<channels;i++){values[i*output]*=Math.min(1,1-pan);values[i*output+1]*=Math.min(1,1+pan);}
             processor.putChannelMixingMatrix(new ChannelMixingMatrix(channels,output,values));
         }
         return Collections.singletonList(processor);
+    }
+    private static boolean activeLane(TransitionTiming timing,int lane,long timeUs){
+        for(int i=lane;i<timing.starts.length;i+=2)if(timeUs>=timing.starts[i]*1000L&&timeUs<timing.ends[i]*1000L)return true;
+        return false;
+    }
+    /** Called before a preview seek; each processor starts the next flush at its event-relative time. */
+    static void seekAudio(Composition composition,long projectTimeUs){
+        for(EditedMediaItemSequence sequence:composition.sequences)for(EditedMediaItem item:sequence.editedMediaItems)
+            for(AudioProcessor processor:item.effects.audioProcessors)if(processor instanceof AudioFadeProcessor)((AudioFadeProcessor)processor).seekProjectPosition(projectTimeUs);
     }
     private static Source inspect(Context context,Uri uri,boolean requireVideo,boolean requireAudio)throws IOException {
         String scheme=uri==null?null:uri.getScheme();

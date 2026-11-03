@@ -8,6 +8,8 @@ SOURCES=("$BASE/ClipMath.java" "$BASE/EditHistory.java" "$BASE/Sequence.java" "$
 TESTS=(ClipMathTest WorkspaceLogicTest SequenceTest Mp4DurationTest)
 if [[ -f "$BASE/EffectSpec.java" ]]; then SOURCES+=("$BASE/EffectSpec.java"); fi
 if [[ -f "$PROJECT/tests/EffectSpecTest.java" ]]; then TESTS+=(EffectSpecTest); fi
+if [[ -f "$BASE/TransitionTiming.java" ]]; then SOURCES+=("$BASE/TransitionTiming.java"); fi
+if [[ -f "$PROJECT/tests/TransitionTimingTest.java" ]]; then TESTS+=(TransitionTimingTest); fi
 for TEST in "${TESTS[@]}"; do SOURCES+=("$PROJECT/tests/$TEST.java"); done
 java com.sun.tools.javac.Main --release 8 -d "$OUT" "${SOURCES[@]}"
 for TEST in "${TESTS[@]}"; do java -cp "$OUT" "com.personal.sonyvegasvideo.$TEST"; done
