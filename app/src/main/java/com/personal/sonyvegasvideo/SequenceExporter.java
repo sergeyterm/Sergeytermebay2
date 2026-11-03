@@ -5,6 +5,7 @@ import android.content.Context;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaMuxer;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -77,6 +78,15 @@ public final class SequenceExporter {
             if(p.video==null)throw new IOException("Нет видео: "+clip.name);
             p.rotation=p.video.containsKey(MediaFormat.KEY_ROTATION)?p.video.getInteger(MediaFormat.KEY_ROTATION):0;
             long sourceDuration=p.video.containsKey(MediaFormat.KEY_DURATION)?p.video.getLong(MediaFormat.KEY_DURATION):clip.outMs*1000L;
+            // Track duration can include encoder priming/edit-list padding. Use the
+            // movie's presentation duration so EOF cuts do not add a padded frame.
+            MediaMetadataRetriever metadata=new MediaMetadataRetriever();
+            try{
+                metadata.setDataSource(context,Uri.parse(clip.source));
+                String millis=metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                if(millis!=null){long presentationMs=Long.parseLong(millis);if(presentationMs>0&&presentationMs<=Long.MAX_VALUE/1000)sourceDuration=Math.min(sourceDuration,presentationMs*1000);}
+            }catch(RuntimeException unavailable){/* Keep the extractor duration if movie metadata is unavailable. */}
+            finally{metadata.release();}
             if(sourceDuration<=0||clip.inMs*1000L>=sourceDuration||clip.outMs*1000L>sourceDuration+500_000L)throw new IOException("Границы выходят за длительность исходника: "+clip.name);
             long requestedEnd=Math.min(clip.outMs*1000L,sourceDuration);
             e.selectTrack(p.videoTrack);e.seekTo(clip.inMs*1000L,MediaExtractor.SEEK_TO_CLOSEST_SYNC);
@@ -87,7 +97,6 @@ public final class SequenceExporter {
             e.seekTo(requestedEnd,MediaExtractor.SEEK_TO_CLOSEST_SYNC);long closeOut=e.getSampleTime();
             if(closeOut<0||Math.abs(closeOut-requestedEnd)>1000)e.seekTo(requestedEnd,MediaExtractor.SEEK_TO_NEXT_SYNC);
             long next=e.getSampleTime();
-            long duration=p.video.containsKey(MediaFormat.KEY_DURATION)?p.video.getLong(MediaFormat.KEY_DURATION):clip.outMs*1000L;
             p.out=next>=requestedEnd-1000?Math.min(next,sourceDuration):sourceDuration;
             if(p.out<=p.in)throw new IOException("Пустой фрагмент: "+clip.name);return p;
         }finally{e.release();}
