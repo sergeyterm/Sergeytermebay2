@@ -45,6 +45,7 @@ final class EditorUiChecks {
         }
         importMain(source);EditorPreview preview=preview(main);ready(main);check(!s.main(preview::isPlaying),"Import started playback");check(s.main(preview::getDuration)>5000,"Imported media duration missing");
         step("docking, Explorer, preview sizing and visible paused video");workspaceViews(source);
+        crossClipPreview(red,blue,size);
 
         step("precise range validation, undo and redo");
         s.clickDescription(main,"Точные границы фрагмента");s.setEditable(0,"00:00:00.500");s.setEditable(1,"00:00:02.500");s.windowClick("OK");
@@ -113,9 +114,9 @@ final class EditorUiChecks {
         check(reopened.effects.equals(configured.effects)&&reopened.sequence.length()==configured.sequence.length(),"Project roundtrip lost effects/layers/range");
 
         step("actual system picker cancel and activity recreation");
-        Intent pickerIntent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*");
+        android.content.ComponentName pickerComponent=s.systemVideoPicker();
         s.await(()->s.main(main::hasWindowFocus)&&s.focusedApplication(s.context.getPackageName(),true),10000,"Main workspace was not focused before opening real picker");
-        s.clickDescription(main,"Открыть видео");android.content.ComponentName pickerComponent=pickerIntent.resolveActivity(s.context.getPackageManager());check(pickerComponent!=null,"No system document picker resolves this import intent after launch");s.await(()->s.focusedApplication(pickerComponent.getPackageName(),true),20000,"Real document picker did not expose a focused interactive window");s.settle();s.back();
+        s.clickDescription(main,"Открыть видео");s.await(()->s.focusedApplication(pickerComponent.getPackageName(),true),20000,"Real document picker did not expose a focused interactive window");s.settle();s.back();
         s.await(()->s.main(main::hasWindowFocus)&&s.focusedApplication(s.context.getPackageName(),true),15000,"Did not return from document picker");ready(main);
         main=recreate(main,MainActivity.class);ready(main);check(saveMain(saved).effects.equals(configured.effects),"Activity recreation lost project effects");
         s.screenshot("ui-full-"+size);
@@ -151,14 +152,7 @@ final class EditorUiChecks {
         s.clickDescription(sequence,"Undo");check(!saveSequence(sequenceSave).muted,"Second mute undo failed");
         s.clickDescription(sequence,"Undo");check(saveSequence(sequenceSave).sequence.length()==moved.sequence.length(),"Sequence trim history was lost on recreation");
         s.screenshot("qa-sequence-"+size);
-        step("real cross-clip preview: odd-only tail, overlap pixels and playback clock");
-        ProjectCodec.Project overlapProject=new ProjectCodec.Project();overlapProject.sequence=new Sequence().append(new Sequence.Clip(red.toString(),"red",0,1000)).append(new Sequence.Clip(blue.toString(),"blue",0,1000));overlapProject.effects.transition="dissolve";overlapProject.effects.transitionMs=400;
-        Uri overlapFile=s.document("preview-overlap.vvp",ProjectCodec.write(overlapProject));Instrumentation.ActivityMonitor overlapPicker=s.picker(Intent.ACTION_OPEN_DOCUMENT,overlapFile);s.clickText(sequence,"File");s.windowClick("Open project…");s.picked(overlapPicker);sequenceReady();
-        s.await(()->s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,10000,"Preview did not use the shortened overlap timeline");
-        seekSequence(1300);s.await(()->{double[] color=previewRgb(sequence);return color[2]>.65&&color[0]<.2;},15000,"Odd-lane preview did not show the blue clip after the first clip ended");
-        s.screenshot("qa-transition-blue-"+size);seekSequence(800);s.await(()->{double[] color=previewRgb(sequence);return color[0]>.25&&color[2]>.25&&color[1]<.2;},15000,"Paused overlap preview did not blend both source clips");
-        s.screenshot("qa-transition-blend-"+size);seekSequence(500);s.clickDescription(sequence,"Play / Pause");s.await(()->s.main(preview(sequence)::getCurrentPosition)>1100,10000,"Preview clock froze when playback entered the odd-only section");
-        s.clickDescription(sequence,"Stop");check(s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,"Transition playback changed project duration");
+        Instrumentation.ActivityMonitor reopen=s.picker(Intent.ACTION_OPEN_DOCUMENT,sequenceSave);s.clickText(sequence,"File");s.windowClick("Open project…");s.picked(reopen);sequenceReady();check(saveSequence(sequenceSave).sequence.length()==moved.sequence.length(),"Sequence Open project lost the saved edit list");
         finish(sequence);sequence=null;s.await(()->s.main(main::hasWindowFocus),10000,"Main workspace not restored");ready(main);
 
         step("invalid projects/media report errors and recover");
@@ -178,6 +172,18 @@ final class EditorUiChecks {
         s.screenshot("qa-empty-"+size);
         s.clickText(main,"File");s.windowClick("Restore previous project");ready(main);
         ProjectCodec.Project restored=saveMain(saved);check(restored.sequence.clips.size()==1&&restored.sequence.length()>=900&&restored.sequence.length()<=1250,"Restore previous project did not recover the generated clip");
+    }
+    private void crossClipPreview(Uri red,Uri blue,String size)throws Exception{
+        step("real cross-clip preview: odd-only tail, overlap pixels and playback clock");
+        ProjectCodec.Project overlapProject=new ProjectCodec.Project();overlapProject.sequence=new Sequence().append(new Sequence.Clip(red.toString(),"red",0,1000)).append(new Sequence.Clip(blue.toString(),"blue",0,1000));overlapProject.effects.transition="dissolve";overlapProject.effects.transitionMs=400;
+        String json=ProjectCodec.write(overlapProject);Instrumentation.ActivityMonitor monitor=s.test.addMonitor(SequenceActivity.class.getName(),null,false);
+        s.main(()->{main.startActivity(new Intent(main,SequenceActivity.class).putExtra("projectJson",json));return null;});sequence=s.test.waitForMonitorWithTimeout(monitor,15000);s.test.removeMonitor(monitor);check(sequence!=null,"Cross-clip preview workspace did not open");sequenceReady();
+        s.await(()->s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,10000,"Preview did not use the shortened overlap timeline");
+        seekSequence(1300);s.await(()->{double[] color=previewRgb(sequence);return color[2]>.65&&color[0]<.2;},15000,"Odd-lane preview did not show the blue clip after the first clip ended");
+        s.screenshot("qa-transition-blue-"+size);seekSequence(800);s.await(()->{double[] color=previewRgb(sequence);return color[0]>.25&&color[2]>.25&&color[1]<.2;},15000,"Paused overlap preview did not blend both source clips");
+        s.screenshot("qa-transition-blend-"+size);seekSequence(500);s.clickDescription(sequence,"Play / Pause");s.await(()->s.main(preview(sequence)::getCurrentPosition)>1100,10000,"Preview clock froze when playback entered the odd-only section");
+        s.clickDescription(sequence,"Stop");check(s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,"Transition playback changed project duration");finish(sequence);sequence=null;
+        s.await(()->s.main(main::hasWindowFocus)&&s.focusedApplication(s.context.getPackageName(),true),10000,"Main workspace was not restored after early cross-clip preview");ready(main);
     }
     private void workspaceViews(Uri source)throws Exception{
         EditorPreview video=preview(main);View libraryTab=s.main(()->NativeTestSupport.findText(main.getWindow().getDecorView(),"Project Media"));int width=s.main(video::getWidth);

@@ -2,6 +2,7 @@ package com.personal.sonyvegasvideo;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -35,7 +36,7 @@ public final class EditorPreview extends FrameLayout {
     private Uri source;
     private boolean muted,ready,wantPlay,released,preparedNotified,seekInFlight;
     private int queuedSeek=-1;
-    private Runnable layeredSeek;
+    private Runnable seekReload;
     private int duration,pendingPosition,effectStart,effectEnd=-1;
     private long generation,seekSerial;
     private float volume=1,speed=1,canvasAspect;
@@ -110,8 +111,8 @@ public final class EditorPreview extends FrameLayout {
             int target=queuedSeek;
             // Repeating the same seek from prepare/listener/UI unnecessarily flushes
             // CompositionPlayer's video graph. Serialize new seeks until it is ready.
-            if(Math.abs(player.getCurrentPosition()*speed-target)<=2){queuedSeek=-1;cancelLayeredSeek();return;}
-            if(composition!=null&&composition.sequences.size()>1){scheduleLayeredSeek();return;}
+            if(Math.abs(player.getCurrentPosition()*speed-target)<=2){queuedSeek=-1;cancelSeekReload();return;}
+            if(Build.VERSION.SDK_INT<=30||(composition!=null&&composition.sequences.size()>1)){scheduleSeekReload();return;}
             queuedSeek=-1;
             seekInFlight=true;
             if(composition!=null)MediaPipeline.seekAudio(composition,target*1000L);
@@ -122,21 +123,21 @@ public final class EditorPreview extends FrameLayout {
             },120);
         }catch(RuntimeException e){fail(e,generation);}
     }
-    private void scheduleLayeredSeek(){
-        cancelLayeredSeek();final long ticket=generation;
-        layeredSeek=()->{
-            layeredSeek=null;
+    private void scheduleSeekReload(){
+        cancelSeekReload();final long ticket=generation;
+        seekReload=()->{
+            seekReload=null;
             if(released||ticket!=generation||queuedSeek<0)return;
             pendingPosition=queuedSeek;
-            // MultipleInputVideoGraph.flush only flushes its pre-processors. Its
-            // compositor can retain a frame from before the seek, so create a new
-            // graph and fresh audio processors at the requested start position.
+            // MultipleInputVideoGraph's partial flush retains compositor state;
+            // older platform codecs can also stall a paused single-input flush.
+            // Rebuild both cases with fresh processors at the requested position.
             // This is a seek within already prepared media, not another import.
             reload(false);
         };
-        main.postDelayed(layeredSeek,100);
+        main.postDelayed(seekReload,100);
     }
-    private void cancelLayeredSeek(){if(layeredSeek!=null)main.removeCallbacks(layeredSeek);layeredSeek=null;}
+    private void cancelSeekReload(){if(seekReload!=null)main.removeCallbacks(seekReload);seekReload=null;}
     public void seekTo(long position,int ignoredMode){seekTo((int)Math.min(Integer.MAX_VALUE,Math.max(0,position)));}
     public void setVolume(float left,float right){volume=Math.max(0,Math.min(1,(left+right)/2));if(player!=null)try{player.setVolume(volume);}catch(RuntimeException ignored){}}
     public void setResizeMode(int mode){if(mode>=0&&mode<=4){resizeMode=mode;if(view!=null)view.setResizeMode(mode);applyCanvasAspect();}}
@@ -208,7 +209,7 @@ public final class EditorPreview extends FrameLayout {
         }catch(RuntimeException error){fail(error,ticket);}
     }
     private void releasePlayer(){
-        cancelLayeredSeek();
+        cancelSeekReload();
         CompositionPlayer old=player;player=null;composition=null;seekInFlight=false;queuedSeek=-1;
         // A timed-out codec release can still own the old EGL window. Detach the
         // SurfaceView so the next graph receives a new native window, never that

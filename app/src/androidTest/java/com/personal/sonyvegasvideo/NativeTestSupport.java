@@ -106,6 +106,16 @@ final class NativeTestSupport implements AutoCloseable {
         await(()->{AccessibilityNodeInfo actual=editable(index);return actual!=null&&value.contentEquals(actual.getText()==null?"":actual.getText());},5000,"Editable #"+index+" did not accept text "+value);
     }
     void back(){test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);settle();}
+    android.content.ComponentName systemVideoPicker()throws Exception{
+        // The test inspects system routing; app PackageManager queries are visibility-filtered.
+        String command="cmd package resolve-activity --brief --user current -a android.intent.action.OPEN_DOCUMENT -c android.intent.category.OPENABLE -t video/*";
+        String output;
+        try(InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(test.getUiAutomation().executeShellCommand(command));java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
+            byte[] buffer=new byte[1024];int count;while((count=in.read(buffer))!=-1){bytes.write(buffer,0,count);require(bytes.size()<65536,"System picker resolver returned unexpected output");}output=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for(String line:output.split("\\r?\\n")){String value=line.trim();if(!value.matches("[A-Za-z0-9_.$]+/[A-Za-z0-9_.$]+"))continue;android.content.ComponentName component=android.content.ComponentName.unflattenFromString(value);if(component!=null){step("System document picker: "+component.flattenToShortString());return component;}}
+        throw new AssertionError("System document picker did not resolve: "+output);
+    }
     boolean focusedApplication(String packageName,boolean interactive){
         for(android.view.accessibility.AccessibilityWindowInfo window:test.getUiAutomation().getWindows()){
             if(window.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION||!window.isFocused())continue;
