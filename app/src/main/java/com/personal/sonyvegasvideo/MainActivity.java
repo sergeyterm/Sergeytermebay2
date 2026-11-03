@@ -354,7 +354,7 @@ public final class MainActivity extends Activity {
         sourceGeneration++;
         videoUri=uri;durationMs=0;prepared=false;currentPlayer=null;mediaInfo=null;mediaName="Video";placeholder.setText("Загрузка видео…");placeholder.setVisibility(View.VISIBLE);updateEnabled();renderLibrary();
         timeline.media(0,"",false,null,null);timeline.selection(0,0,muted);timeline.position(0);
-        setStatus("Загрузка медиа…");try{preview.setVideoURI(uri,effects,muted);}catch(RuntimeException e){setStatus("Не удалось открыть файл: "+e.getMessage());}
+        setStatus("Загрузка медиа…");try{preview.setVideoURI(uri,effects,muted);preview.seekTo(restorePosition);}catch(RuntimeException e){setStatus("Не удалось открыть файл: "+e.getMessage());}
         probe.load(this,uri,info->{
             if(!uri.equals(videoUri)||isDestroyed())return;mediaInfo=info;if(info.name!=null)mediaName=info.name;
             windowTitle.setText(mediaName+" — Sony Vegas Video");sourceLabel.setText(mediaName);

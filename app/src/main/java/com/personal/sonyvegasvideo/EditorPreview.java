@@ -145,13 +145,14 @@ public final class EditorPreview extends FrameLayout {
         if(worker==null||worker.isShutdown())worker=Executors.newSingleThreadExecutor();
         worker.execute(()->{
             try{
+                int knownDuration=selected!=null?MediaPipeline.durationMs(application,selected):TransitionTiming.lengthMs(project,spec);
                 Composition composition=selected!=null?MediaPipeline.single(application,selected,0,-1,spec,mute,rate,from,to):MediaPipeline.preview(application,project,spec,mute,rate);
                 float aspect=MediaPipeline.previewAspectRatio(application,selected!=null?selected:Uri.parse(project.clips.get(0).source));
-                main.post(()->{if(!released&&ticket==generation)install(composition,aspect,ticket);});
+                main.post(()->{if(!released&&ticket==generation)install(composition,aspect,knownDuration,ticket);});
             }catch(Exception error){main.post(()->fail(error,ticket));}
         });
     }
-    private void install(Composition composition,float aspect,long ticket){
+    private void install(Composition composition,float aspect,int knownDuration,long ticket){
         try{
             CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application).setLooper(Looper.getMainLooper());
             if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
@@ -161,7 +162,7 @@ public final class EditorPreview extends FrameLayout {
                     if(ticket!=generation||player!=current||released)return;
                     if(state==Player.STATE_READY){
                         ready=true;seekInFlight=false;getDuration();applyCanvasAspect();
-                        if(!preparedNotified){preparedNotified=true;seekTo(pendingPosition);if(preparedListener!=null)preparedListener.accept(EditorPreview.this);}
+                        if(!preparedNotified){preparedNotified=true;if(preparedListener!=null)preparedListener.accept(EditorPreview.this);}
                         if(ticket!=generation||player!=current||released)return;
                         drainSeek();
                         if(wantPlay)current.play();
@@ -169,7 +170,16 @@ public final class EditorPreview extends FrameLayout {
                 }
                 @Override public void onPlayerError(PlaybackException error){fail(error,ticket);}
             });
-            current.setComposition(composition);current.setVolume(volume);current.prepare();
+            current.setComposition(composition);current.setVolume(volume);
+            // CompositionPlayer delegates seeks to its ExoPlayers even in IDLE.
+            // Select the initial position before any decoder/GL frames are queued;
+            // flushing the paused graph from its first READY callback can deadlock
+            // the API-30 software codec after an effect rebuild or restoration.
+            int initial=queuedSeek>=0?queuedSeek:pendingPosition;queuedSeek=-1;
+            duration=Math.max(0,knownDuration);
+            pendingPosition=Math.max(0,duration>0?Math.min(initial,duration):initial);
+            if(initial>0){MediaPipeline.seekAudio(composition,pendingPosition*1000L);current.seekTo(Math.max(0,Math.round(pendingPosition/speed)));}
+            current.prepare();
             if(wantPlay)current.play();
         }catch(RuntimeException error){fail(error,ticket);}
     }

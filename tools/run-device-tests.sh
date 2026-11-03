@@ -141,12 +141,12 @@ run_case() {
 }
 : > "$OUT/summary.txt"
 run_case regression 300 || FAILURES=$((FAILURES+1))
-run_case effects 900 -e mode effects || FAILURES=$((FAILURES+1))
 if set_profile wide 1768x2208 320; then
     run_case full-wide 300 -e mode full -e screenshot wide -e expectedWidth 1768 -e expectedHeight 2208 -e expectedDensity 320 || FAILURES=$((FAILURES+1))
 else FAILURES=$((FAILURES+1)); fi
 if set_profile compact 1080x2400 420; then
     run_case full-compact 300 -e mode full -e screenshot compact -e expectedWidth 1080 -e expectedHeight 2400 -e expectedDensity 420 || FAILURES=$((FAILURES+1))
 else FAILURES=$((FAILURES+1)); fi
+run_case effects 900 -e mode effects || FAILURES=$((FAILURES+1))
 cat "$OUT/summary.txt"
 [[ "$FAILURES" == 0 ]]
