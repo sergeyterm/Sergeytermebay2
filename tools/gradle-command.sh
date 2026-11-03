@@ -8,6 +8,6 @@ elif [[ -x "$PROJECT/gradlew" ]]; then
 elif command -v gradle >/dev/null 2>&1; then
     VEGAS_GRADLE_COMMAND=(gradle)
 else
-    echo 'Gradle 8.9 is required for AGP 8.7.3 and Media3 dependencies. Install Gradle 8.9 or open this project in Android Studio. GitHub Actions installs the pinned version automatically.' >&2
+    echo 'Gradle 8.11.1 is required for AGP 8.9.2 and Media3 dependencies. Install Gradle 8.11.1 or open this project in Android Studio. GitHub Actions installs the pinned version automatically.' >&2
     return 1
 fi

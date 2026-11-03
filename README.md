@@ -3,16 +3,18 @@
 Личный неофициальный видеоредактор для Android с классической компоновкой Vegas.
 Это самостоятельное приложение, не продукт Sony/VEGAS и не порт Windows-версии.
 
-Версия 2.4 использует AndroidX Media3 1.8.0 для общего предпросмотра и экспорта:
+Версия 2.4 использует AndroidX Media3 1.11.1 для общего предпросмотра и экспорта:
 обрезка, последовательность клипов, эффекты, текст, фоновые генераторы и дополнительные
 слои. Классический интерфейс и имя пакета `com.personal.sonyvegasvideo` сохранены.
 Описание операций и практических ограничений — [README_RU.md](README_RU.md).
 
 ## Сборка
 
-Нужны JDK 17, Gradle 8.9, Android SDK Platform 35 / Build Tools 35.0.0,
+Нужны JDK 17, Gradle 8.11.1, Android SDK Platform 36 / Build Tools 35.0.0,
 Bash и Python 3. Для тестовых роликов нужен FFmpeg 6 или новее.
 При первой Gradle-сборке требуется доступ к Google Maven и Maven Central.
+Зафиксированы AGP 8.9.2 и Gradle 8.11.1. Media3 1.11.1 требует compile SDK 36
+в метаданных опубликованных AAR; target SDK остаётся 35, минимум Android — API 29.
 
 ```sh
 export ANDROID_HOME=/path/to/android-sdk
@@ -34,7 +36,7 @@ bash tools/build-device-tests.sh
 ## GitHub Actions
 
 Workflow `Build and test Vegas Video` запускается при push в main/master и вручную.
-Он устанавливает Gradle 8.9 и SDK 35, выполняет JVM-проверки, генерирует тестовые
+Он устанавливает Gradle 8.11.1 и SDK 36, выполняет JVM-проверки, генерирует тестовые
 видео и собирает оба APK. Артефакт — `Vegas_Video_2.4_CI_APKs`.
 
 Матрица Android-тестов: API 30 (AOSP) и API 35 (Google APIs), x86_64 с KVM.

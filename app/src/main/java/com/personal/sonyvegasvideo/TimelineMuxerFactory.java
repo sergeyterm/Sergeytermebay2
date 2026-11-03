@@ -11,7 +11,7 @@ import androidx.media3.transformer.DefaultMuxer;
 import com.google.common.collect.ImmutableList;
 import java.nio.ByteBuffer;
 
-/** Anchors the first picture and declares the intended final frame duration to MediaMuxer. */
+/** Anchors the first picture and declares the intended final frame duration to the MP4 muxer. */
 final class TimelineMuxerFactory implements Muxer.Factory {
     private final DefaultMuxer.Factory delegate;
     TimelineMuxerFactory(long durationUs){

@@ -154,7 +154,8 @@ public final class EditorPreview extends FrameLayout {
     }
     private void install(Composition composition,float aspect,int knownDuration,long ticket){
         try{
-            CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application).setLooper(Looper.getMainLooper());
+            CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application)
+                    .setLooper(Looper.getMainLooper()).setPerStreamMediaProgressionEnabled(true);
             if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
             CompositionPlayer current=builder.build();player=current;this.composition=composition;canvasAspect=aspect;view.setPlayer(current);applyCanvasAspect();
             current.addListener(new Player.Listener(){
@@ -170,15 +171,13 @@ public final class EditorPreview extends FrameLayout {
                 }
                 @Override public void onPlayerError(PlaybackException error){fail(error,ticket);}
             });
-            current.setComposition(composition);current.setVolume(volume);
-            // CompositionPlayer delegates seeks to its ExoPlayers even in IDLE.
-            // Select the initial position before any decoder/GL frames are queued;
-            // flushing the paused graph from its first READY callback can deadlock
-            // the API-30 software codec after an effect rebuild or restoration.
+            // Initialize every sequence at the restored position, before decoders
+            // and the compositor prepare. No first-READY graph flush is needed.
             int initial=queuedSeek>=0?queuedSeek:pendingPosition;queuedSeek=-1;
             duration=Math.max(0,knownDuration);
-            pendingPosition=Math.max(0,duration>0?Math.min(initial,duration):initial);
-            if(initial>0){MediaPipeline.seekAudio(composition,pendingPosition*1000L);current.seekTo(Math.max(0,Math.round(pendingPosition/speed)));}
+            pendingPosition=Math.max(0,duration>0?Math.min(initial,duration-1):initial);
+            MediaPipeline.seekAudio(composition,pendingPosition*1000L);
+            current.setComposition(composition,Math.max(0,Math.round(pendingPosition/speed)));current.setVolume(volume);
             current.prepare();
             if(wantPlay)current.play();
         }catch(RuntimeException error){fail(error,ticket);}

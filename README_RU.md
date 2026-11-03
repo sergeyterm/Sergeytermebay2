@@ -1,7 +1,7 @@
 # Sony Vegas Video 2.4
 
 Личный Android-видеоредактор с классической компоновкой Sony Vegas. Минимальная
-версия Android — 10 / API 29; compile/target SDK 35. Имя пакета остаётся
+версия Android — 10 / API 29; compile SDK 36, target SDK 35. Имя пакета остаётся
 `com.personal.sonyvegasvideo`, versionCode 7. Это самостоятельное неофициальное
 приложение, не продукт Sony/VEGAS и не полная настольная версия.
 
@@ -81,7 +81,9 @@ APK локальной сборки: `build/sdk/Sony_Vegas_Video_v2.4.apk`. Дл
 предыдущих личных версий нужен тот же сертификат. Публичный CI применяет временный
 ключ, поэтому его APK не заменяет личную подписанную сборку автоматически.
 
-Сборка: JDK 17, Gradle 8.9, SDK 35, Build Tools 35.0.0, Bash, Python 3.
+Сборка: JDK 17, Gradle 8.11.1, SDK 36, Build Tools 35.0.0, Bash, Python 3.
+Плагин Android Gradle зафиксирован на 8.9.2. Media3 1.11.1 требует compile SDK 36;
+повышение compile SDK не меняет target SDK 35 и минимум API 29.
 Для генерации синтетических роликов тестов требуется FFmpeg >= 6.
 Команды и CI-артефакты описаны в [README.md](README.md).
 

@@ -5,7 +5,6 @@ import android.content.res.AssetFileDescriptor;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.net.Uri;
-import android.util.Pair;
 import androidx.media3.common.C;
 import androidx.media3.common.Effect;
 import androidx.media3.common.MediaItem;
@@ -29,11 +28,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 /** Shared composition graph for preview and MP4 output. Call metadata methods off the UI thread. */
 public final class MediaPipeline {
     private MediaPipeline() { }
-    private static Uri previewGapImage;
     private static final class Source {long durationUs;boolean video,audio;int width,height;}
 
     public static int durationMs(Context context,Uri uri)throws IOException {
@@ -59,16 +59,13 @@ public final class MediaPipeline {
         return compose(context,new Sequence().append(new Sequence.Clip(uri.toString(),"Video",Math.max(0,startMs),end)),settings,muted,speed,effectStartMs*1000L,effectEndMs>effectStartMs?(effectEndMs-effectStartMs)*1000L:-1);
     }
     static Composition preview(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed)throws IOException {
-        return compose(context,sequence,settings,muted,speed,0,-1,true);
+        return compose(context,sequence,settings,muted,speed,0,-1);
     }
 
     private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed)throws IOException {
         return compose(context,sequence,settings,muted,speed,0,-1);
     }
     private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed,long effectOriginUs,long effectDurationUs)throws IOException {
-        return compose(context,sequence,settings,muted,speed,effectOriginUs,effectDurationUs,false);
-    }
-    private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed,long effectOriginUs,long effectDurationUs,boolean preview)throws IOException {
         if(sequence==null||sequence.clips.isEmpty())throw new IOException("Проект пуст. Импортируйте видео.");
         EffectSpec spec=(settings==null?new EffectSpec():settings.copy()).normalize();
         if(!Float.isFinite(speed)||speed<=0)throw new IOException("Некорректная скорость предпросмотра.");
@@ -90,12 +87,12 @@ public final class MediaPipeline {
         final long totalUs=timing.length*1000L;
         if(crossClips){
             for(int lane=0;lane<2;lane++){
-                EditedMediaItemSequence.Builder events=new EditedMediaItemSequence.Builder();long positionUs=0;
+                EditedMediaItemSequence.Builder events=new EditedMediaItemSequence.Builder(trackTypes(true,forceAudio));long positionUs=0;
                 for(int i=lane;i<sequence.clips.size();i+=2){
                     Sequence.Clip clip=sequence.clips.get(i);Source input=sources.get(clip.source);
                     long startUs=timing.starts[i]*1000L,lengthUs=clip.length()*1000L;
                     long fadeInUs=i>0?timing.overlaps[i-1]*1000L:0,fadeOutUs=i<timing.overlaps.length?timing.overlaps[i]*1000L:0;
-                    if(startUs>positionUs)addGap(context,events,startUs-positionUs,preview);
+                    if(startUs>positionUs)events.addGap(startUs-positionUs);
                     List<Effect> video=new ArrayList<>();video.add(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT));
                     // Front/even clips fade in/out over the fully visible moving back/odd clip.
                     // Internal effects receive project timestamps after Media3 adds the event offset.
@@ -105,8 +102,8 @@ public final class MediaPipeline {
                     events.addItem(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,Math.min(clip.outMs*1000L,input.durationUs),muted,false,audio,video,1f));
                     positionUs=timing.ends[i]*1000L;
                 }
-                if(positionUs<totalUs)addGap(context,events,totalUs-positionUs,preview);
-                bases.add(events.experimentalSetForceVideoTrack(true).experimentalSetForceAudioTrack(forceAudio).build());
+                if(positionUs<totalUs)events.addGap(totalUs-positionUs);
+                bases.add(events.build());
             }
         }else{
             List<EditedMediaItem> videos=new ArrayList<>();
@@ -115,7 +112,7 @@ public final class MediaPipeline {
                 videos.add(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,endUs,muted,false,audioProcessors(1f,true),
                         Collections.singletonList(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT)),speed));
             }
-            bases.add(new EditedMediaItemSequence.Builder(videos).experimentalSetForceAudioTrack(forceAudio).build());
+            bases.add(new EditedMediaItemSequence.Builder(trackTypes(true,forceAudio)).addItems(videos).build());
         }
         List<EditedMediaItemSequence> sequences=new ArrayList<>();
         if(pip){
@@ -128,13 +125,13 @@ public final class MediaPipeline {
                 repeated.add(item(overlay,source.durationUs,0,length,true,false,Collections.emptyList(),VideoEffects.create(key,length,0),1f));at+=length;}
             // Media3 draws its primary stream on top. Explicit repetition also gives preview
             // a full-length primary timeline; primary looping is unsupported in Media3 1.8.
-            sequences.add(new EditedMediaItemSequence.Builder(repeated).build());
+            sequences.add(new EditedMediaItemSequence.Builder(trackTypes(true,false)).addItems(repeated).build());
         }
         sequences.addAll(bases);
         if(hasMusic){
             Uri audio=Uri.parse(spec.audioUri);Source source=inspect(context,audio,false,true);
             EditedMediaItem music=item(audio,source.durationUs,0,source.durationUs,false,true,audioProcessors(spec.audioGain,true),Collections.emptyList(),1f);
-            sequences.add(new EditedMediaItemSequence.Builder(music).setIsLooping(true).build());
+            sequences.add(new EditedMediaItemSequence.Builder(trackTypes(false,true)).addItem(music).setIsLooping(true).build());
         }
         EffectSpec visual=spec.copy();if(pip)visual.chromaKey=false;if(crossClips)visual.transition="none";
         List<Effect> effects=new ArrayList<>(VideoEffects.create(visual,(long)((effectDurationUs>0?effectDurationUs:totalUs)/speed),(long)(effectOriginUs/speed)));
@@ -155,35 +152,26 @@ public final class MediaPipeline {
         return builder.build();
     }
 
-    private static void addGap(Context context,EditedMediaItemSequence.Builder sequence,long durationUs,boolean preview)throws IOException {
-        if(!preview){sequence.addGap(durationUs);return;}
-        // CompositionPlayer 1.8 turns addGap into audio silence only. An invisible
-        // image stream also supplies the video clock needed by the compositor.
-        Uri image;
-        synchronized(MediaPipeline.class){
-            if(previewGapImage==null)previewGapImage=GeneratedMedia.create(context,"solid","",android.graphics.Color.BLACK,64,64);
-            image=previewGapImage;
-        }
-        MediaItem item=new MediaItem.Builder().setUri(image).setMimeType("image/png").setImageDurationMs(Math.max(1,(durationUs+999)/1000)).build();
-        sequence.addItem(new EditedMediaItem.Builder(item).setDurationUs(durationUs).setFrameRate(30).build());
-    }
-
     static Composition generated(Uri image,int durationMs){
         if(durationMs<250||durationMs>600_000)throw new IllegalArgumentException("Длительность фона: от 0,25 до 600 секунд.");
         MediaItem media=new MediaItem.Builder().setUri(image).setMimeType("image/png").setImageDurationMs(durationMs).build();
         EditedMediaItem item=new EditedMediaItem.Builder(media).setRemoveAudio(true).setFrameRate(24).setDurationUs(durationMs*1000L).build();
-        return new Composition.Builder(new EditedMediaItemSequence.Builder(item).build())
+        return new Composition.Builder(new EditedMediaItemSequence.Builder(trackTypes(true,false)).addItem(item).build())
                 .setEffects(new Effects(Collections.emptyList(),Collections.singletonList(Presentation.createForWidthAndHeight(1280,720,Presentation.LAYOUT_SCALE_TO_FIT))))
                 .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL).build();
     }
     private static EditedMediaItem item(Uri uri,long durationUs,long startUs,long endUs,boolean removeAudio,boolean removeVideo,List<AudioProcessor> audio,List<Effect> video,float speed){
         MediaItem media=new MediaItem.Builder().setUri(uri).setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder().setStartPositionUs(startUs).setEndPositionUs(endUs).build()).build();
-        List<AudioProcessor> processors=new ArrayList<>(audio);List<Effect> visual=new ArrayList<>(video);
+        EditedMediaItem.Builder builder=new EditedMediaItem.Builder(media).setDurationUs(durationUs)
+                .setRemoveAudio(removeAudio).setRemoveVideo(removeVideo).setEffects(new Effects(audio,video));
         if(speed!=1f){
             SpeedProvider provider=new SpeedProvider(){@Override public float getSpeed(long timeUs){return speed;}@Override public long getNextSpeedChangeTimeUs(long timeUs){return C.TIME_UNSET;}};
-            Pair<AudioProcessor,Effect> pair=Effects.createExperimentalSpeedChangingEffect(provider);processors.add(pair.first);visual.add(pair.second);
+            builder.setSpeed(provider);
         }
-        return new EditedMediaItem.Builder(media).setDurationUs(durationUs).setRemoveAudio(removeAudio).setRemoveVideo(removeVideo).setEffects(new Effects(processors,visual)).build();
+        return builder.build();
+    }
+    private static Set<Integer> trackTypes(boolean video,boolean audio){
+        Set<Integer> types=new HashSet<>();if(video)types.add(C.TRACK_TYPE_VIDEO);if(audio)types.add(C.TRACK_TYPE_AUDIO);return types;
     }
     private static List<AudioProcessor> audioProcessors(float gain,boolean stereo){
         return audioProcessors(gain,stereo,0);
