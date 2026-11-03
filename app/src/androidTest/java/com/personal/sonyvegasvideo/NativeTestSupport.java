@@ -106,6 +106,15 @@ final class NativeTestSupport implements AutoCloseable {
         await(()->{AccessibilityNodeInfo actual=editable(index);return actual!=null&&value.contentEquals(actual.getText()==null?"":actual.getText());},5000,"Editable #"+index+" did not accept text "+value);
     }
     void back(){test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);settle();}
+    boolean focusedApplication(String packageName,boolean interactive){
+        for(android.view.accessibility.AccessibilityWindowInfo window:test.getUiAutomation().getWindows()){
+            if(window.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION||!window.isFocused())continue;
+            AccessibilityNodeInfo root=window.getRoot();if(root==null||!packageName.contentEquals(root.getPackageName()==null?"":root.getPackageName()))continue;
+            if(!interactive||visibleClickable(root))return true;
+        }
+        return false;
+    }
+    private static boolean visibleClickable(AccessibilityNodeInfo node){if(node==null)return false;if(node.isEnabled()&&node.isClickable()&&node.isVisibleToUser())return true;for(int i=0;i<node.getChildCount();i++)if(visibleClickable(node.getChild(i)))return true;return false;}
     void dismissIfPresent(String value){settle();if(hasText(value))windowClick(value);}
     void screenshot(String name)throws Exception{
         Bitmap image=test.getUiAutomation().takeScreenshot();require(image!=null,"Screenshot unavailable");File out=new File(context.getFilesDir(),name+".png");
@@ -115,7 +124,7 @@ final class NativeTestSupport implements AutoCloseable {
     static View findText(View view,String value){if(view instanceof TextView&&value.contentEquals(((TextView)view).getText()))return view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),value);if(found!=null)return found;}}return null;}
     static TextView textPrefix(View view,String value){if(view instanceof TextView&&((TextView)view).getText().toString().startsWith(value))return (TextView)view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){TextView found=textPrefix(group.getChildAt(i),value);if(found!=null)return found;}}return null;}
     static <T>T findClass(View view,Class<T> type){if(type.isInstance(view))return type.cast(view);if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){T found=findClass(group.getChildAt(i),type);if(found!=null)return found;}}return null;}
-    String windowText(){StringBuilder out=new StringBuilder();collectText(activeRoot(),out,0);return out.toString();}
+    String windowText(){StringBuilder out=new StringBuilder();for(android.view.accessibility.AccessibilityWindowInfo window:test.getUiAutomation().getWindows())if(window.isFocused()){AccessibilityNodeInfo root=window.getRoot();out.append("[focused package=").append(root==null?"?":root.getPackageName()).append(", type=").append(window.getType()).append("] ");}collectText(activeRoot(),out,0);return out.toString();}
     private AccessibilityNodeInfo activeRoot(){AccessibilityNodeInfo root=test.getUiAutomation().getRootInActiveWindow();if(root!=null)return root;for(android.view.accessibility.AccessibilityWindowInfo window:test.getUiAutomation().getWindows())if(window.isActive()||window.isFocused()){root=window.getRoot();if(root!=null)return root;}return null;}
     private AccessibilityNodeInfo node(String value,boolean description){return findNode(activeRoot(),value,description);}
     private static AccessibilityNodeInfo findNode(AccessibilityNodeInfo node,String value,boolean description){if(node==null)return null;CharSequence text=description?node.getContentDescription():node.getText();if(text!=null&&(description?value.contentEquals(text):value.trim().equalsIgnoreCase(text.toString().trim())))return node;for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo found=findNode(node.getChild(i),value,description);if(found!=null)return found;}return null;}

@@ -24,7 +24,7 @@ public final class EditorPreview extends FrameLayout {
     public interface ErrorListener {boolean onError(EditorPreview player,int what,int extra);}
     private final Context application;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private final PlayerView view;
+    private PlayerView view;
     private ExecutorService worker=Executors.newSingleThreadExecutor();
     private CompositionPlayer player;
     private Composition composition;
@@ -35,16 +35,21 @@ public final class EditorPreview extends FrameLayout {
     private Uri source;
     private boolean muted,ready,wantPlay,released,preparedNotified,seekInFlight;
     private int queuedSeek=-1;
+    private Runnable layeredSeek;
     private int duration,pendingPosition,effectStart,effectEnd=-1;
     private long generation,seekSerial;
     private float volume=1,speed=1,canvasAspect;
+    private int resizeMode=AspectRatioFrameLayout.RESIZE_MODE_FIT;
     private String errorMessage="";
 
     public EditorPreview(Context context){
         super(context);application=context.getApplicationContext();
-        view=new PlayerView(context);view.setUseController(false);view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
-        view.setKeepContentOnPlayerReset(false);addView(view,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
+        setBackgroundColor(0xff000000);createPlayerView();
         setContentDescription("Предпросмотр видео с эффектами");
+    }
+    private void createPlayerView(){
+        view=new PlayerView(getContext());view.setUseController(false);view.setResizeMode(resizeMode);
+        view.setKeepContentOnPlayerReset(false);addView(view,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
     }
     public void setOnPreparedListener(Consumer<EditorPreview> listener){preparedListener=listener;}
     public void setOnCompletionListener(Consumer<EditorPreview> listener){completionListener=listener;}
@@ -102,10 +107,12 @@ public final class EditorPreview extends FrameLayout {
         if(player==null||!ready||seekInFlight||queuedSeek<0)return;
         try{
             int state=player.getPlaybackState();if(state!=Player.STATE_READY&&state!=Player.STATE_ENDED)return;
-            int target=queuedSeek;queuedSeek=-1;
+            int target=queuedSeek;
             // Repeating the same seek from prepare/listener/UI unnecessarily flushes
             // CompositionPlayer's video graph. Serialize new seeks until it is ready.
-            if(Math.abs(player.getCurrentPosition()*speed-target)<=2)return;
+            if(Math.abs(player.getCurrentPosition()*speed-target)<=2){queuedSeek=-1;cancelLayeredSeek();return;}
+            if(composition!=null&&composition.sequences.size()>1){scheduleLayeredSeek();return;}
+            queuedSeek=-1;
             seekInFlight=true;
             if(composition!=null)MediaPipeline.seekAudio(composition,target*1000L);
             player.seekTo(Math.max(0,Math.round(target/speed)));
@@ -115,13 +122,28 @@ public final class EditorPreview extends FrameLayout {
             },120);
         }catch(RuntimeException e){fail(e,generation);}
     }
+    private void scheduleLayeredSeek(){
+        cancelLayeredSeek();final long ticket=generation;
+        layeredSeek=()->{
+            layeredSeek=null;
+            if(released||ticket!=generation||queuedSeek<0)return;
+            pendingPosition=queuedSeek;
+            // MultipleInputVideoGraph.flush only flushes its pre-processors. Its
+            // compositor can retain a frame from before the seek, so create a new
+            // graph and fresh audio processors at the requested start position.
+            // This is a seek within already prepared media, not another import.
+            reload(false);
+        };
+        main.postDelayed(layeredSeek,100);
+    }
+    private void cancelLayeredSeek(){if(layeredSeek!=null)main.removeCallbacks(layeredSeek);layeredSeek=null;}
     public void seekTo(long position,int ignoredMode){seekTo((int)Math.min(Integer.MAX_VALUE,Math.max(0,position)));}
     public void setVolume(float left,float right){volume=Math.max(0,Math.min(1,(left+right)/2));if(player!=null)try{player.setVolume(volume);}catch(RuntimeException ignored){}}
-    public void setResizeMode(int mode){if(mode>=0&&mode<=4){view.setResizeMode(mode);applyCanvasAspect();}}
+    public void setResizeMode(int mode){if(mode>=0&&mode<=4){resizeMode=mode;if(view!=null)view.setResizeMode(mode);applyCanvasAspect();}}
     private void applyCanvasAspect(){
-        // CompositionPlayer 1.8 does not report VideoSize. Supply the same rotated,
-        // normalized canvas used by export so Fit, Fill and Zoom can lay out video.
-        AspectRatioFrameLayout frame=view.findViewById(androidx.media3.ui.R.id.exo_content_frame);
+        // Supply the same rotated, normalized canvas used by export so Fit, Fill
+        // and Zoom remain consistent across decoder and compositor stream changes.
+        if(view==null)return;AspectRatioFrameLayout frame=view.findViewById(androidx.media3.ui.R.id.exo_content_frame);
         if(frame!=null&&canvasAspect>0)frame.setAspectRatio(canvasAspect);
     }
     public float getPlaybackSpeed(){return speed;}
@@ -138,11 +160,12 @@ public final class EditorPreview extends FrameLayout {
     }
     /** Release permanently when the owning Activity is destroyed. */
     public void release(){if(released)return;stopPlayback();released=true;preparedListener=null;completionListener=null;errorListener=null;}
-    private void reload(){
+    private void reload(){reload(true);}
+    private void reload(boolean notifyPrepared){
         if(released||(source==null&&(sequence==null||sequence.clips.isEmpty())))return;
         final long ticket=++generation;final Uri selected=source;final Sequence project=sequence;
         final EffectSpec spec=settings.copy();spec.masterGain=1;final boolean mute=muted;final float rate=speed;final int from=effectStart,to=effectEnd;
-        releasePlayer();ready=false;preparedNotified=false;errorMessage="";
+        releasePlayer();ready=false;preparedNotified=!notifyPrepared;errorMessage="";
         if(worker==null||worker.isShutdown())worker=Executors.newSingleThreadExecutor();
         worker.execute(()->{
             try{
@@ -158,6 +181,7 @@ public final class EditorPreview extends FrameLayout {
             CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application)
                     .setLooper(Looper.getMainLooper()).setPerStreamMediaProgressionEnabled(true);
             if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
+            if(view==null)createPlayerView();
             CompositionPlayer current=builder.build();player=current;this.composition=composition;canvasAspect=aspect;view.setPlayer(current);applyCanvasAspect();
             current.addListener(new Player.Listener(){
                 @Override public void onPlaybackStateChanged(int state){
@@ -183,7 +207,16 @@ public final class EditorPreview extends FrameLayout {
             if(wantPlay)current.play();
         }catch(RuntimeException error){fail(error,ticket);}
     }
-    private void releasePlayer(){CompositionPlayer old=player;player=null;composition=null;seekInFlight=false;queuedSeek=-1;view.setPlayer(null);if(old!=null)try{old.release();}catch(RuntimeException ignored){}}
+    private void releasePlayer(){
+        cancelLayeredSeek();
+        CompositionPlayer old=player;player=null;composition=null;seekInFlight=false;queuedSeek=-1;
+        // A timed-out codec release can still own the old EGL window. Detach the
+        // SurfaceView so the next graph receives a new native window, never that
+        // still-connected BufferQueue. Preserve the outer view and its listeners.
+        PlayerView oldView=view;view=null;
+        if(oldView!=null){oldView.setPlayer(null);removeView(oldView);}
+        if(old!=null)try{old.release();}catch(RuntimeException error){Log.w("VegasPreview","Previous preview release failed",error);}
+    }
     private void fail(Throwable error,long ticket){
         if(released||ticket!=generation)return;ready=false;wantPlay=false;
         Log.e("VegasPreview","Composition preview failed (generation "+ticket+")",error);

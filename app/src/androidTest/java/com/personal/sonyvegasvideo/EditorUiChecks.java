@@ -113,8 +113,10 @@ final class EditorUiChecks {
         check(reopened.effects.equals(configured.effects)&&reopened.sequence.length()==configured.sequence.length(),"Project roundtrip lost effects/layers/range");
 
         step("actual system picker cancel and activity recreation");
-        s.clickDescription(main,"Открыть видео");s.await(()->!s.main(main::hasWindowFocus),10000,"Real document picker did not open");s.back();
-        s.await(()->s.main(main::hasWindowFocus),10000,"Did not return from document picker");ready(main);
+        Intent pickerIntent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*");
+        s.await(()->s.main(main::hasWindowFocus)&&s.focusedApplication(s.context.getPackageName(),true),10000,"Main workspace was not focused before opening real picker");
+        s.clickDescription(main,"Открыть видео");android.content.ComponentName pickerComponent=pickerIntent.resolveActivity(s.context.getPackageManager());check(pickerComponent!=null,"No system document picker resolves this import intent after launch");s.await(()->s.focusedApplication(pickerComponent.getPackageName(),true),20000,"Real document picker did not expose a focused interactive window");s.settle();s.back();
+        s.await(()->s.main(main::hasWindowFocus)&&s.focusedApplication(s.context.getPackageName(),true),15000,"Did not return from document picker");ready(main);
         main=recreate(main,MainActivity.class);ready(main);check(saveMain(saved).effects.equals(configured.effects),"Activity recreation lost project effects");
         s.screenshot("ui-full-"+size);
 
