@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.Gravity;
 import android.widget.FrameLayout;
 import androidx.media3.common.C;
@@ -185,6 +186,7 @@ public final class EditorPreview extends FrameLayout {
     private void releasePlayer(){CompositionPlayer old=player;player=null;composition=null;seekInFlight=false;queuedSeek=-1;view.setPlayer(null);if(old!=null)try{old.release();}catch(RuntimeException ignored){}}
     private void fail(Throwable error,long ticket){
         if(released||ticket!=generation)return;ready=false;wantPlay=false;
+        Log.e("VegasPreview","Composition preview failed (generation "+ticket+")",error);
         String detail=error.getMessage();errorMessage="Не удалось открыть предпросмотр. "+(detail==null?"Импортируйте исправный локальный файл повторно.":detail);
         releasePlayer();if(errorListener!=null)errorListener.onError(this,error instanceof PlaybackException?((PlaybackException)error).errorCode:-1,0);
     }

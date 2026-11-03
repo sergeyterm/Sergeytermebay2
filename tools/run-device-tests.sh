@@ -127,6 +127,7 @@ run_case() {
         echo "$NAME: command failed or timed out" | tee -a "$OUT/summary.txt"
         adb exec-out screencap -p > "$OUT/screenshots/failure-$NAME.png" 2>/dev/null || true
         adb logcat -d -v threadtime > "$OUT/$NAME-logcat.txt" 2>&1 || true
+        grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)' "$OUT/$NAME-logcat.txt" | tail -200 || true
         adb shell am force-stop "$PACKAGE" || true
         return 1
     fi
@@ -134,6 +135,7 @@ run_case() {
         echo "$NAME: FAIL (see $NAME.txt)" | tee -a "$OUT/summary.txt"
         adb exec-out screencap -p > "$OUT/screenshots/failure-$NAME.png" 2>/dev/null || true
         adb logcat -d -v threadtime > "$OUT/$NAME-logcat.txt" 2>&1 || true
+        grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)' "$OUT/$NAME-logcat.txt" | tail -200 || true
         adb shell am force-stop "$PACKAGE" || true
         return 1
     fi
