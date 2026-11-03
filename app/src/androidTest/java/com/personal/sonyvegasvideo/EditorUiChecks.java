@@ -181,11 +181,15 @@ final class EditorUiChecks {
         String json=ProjectCodec.write(overlapProject);Instrumentation.ActivityMonitor monitor=s.test.addMonitor(SequenceActivity.class.getName(),null,false);
         s.main(()->{main.startActivity(new Intent(main,SequenceActivity.class).putExtra("projectJson",json));return null;});sequence=s.test.waitForMonitorWithTimeout(monitor,15000);s.test.removeMonitor(monitor);check(sequence!=null,"Cross-clip preview workspace did not open");sequenceReady();
         s.await(()->s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,10000,"Preview did not use the shortened overlap timeline");
-        seekSequence(1300);s.await(()->{double[] color=previewRgb(sequence);return color[2]>.65&&color[0]<.2;},15000,"Odd-lane preview did not show the blue clip after the first clip ended");
-        s.screenshot("qa-transition-blue-"+size);seekSequence(800);
-        try{s.await(()->{double[] color=previewRgb(sequence);return color[0]>.25&&color[2]>.25&&color[1]<.2;},15000,"Paused overlap preview did not blend both source clips");}
-        catch(AssertionError failure){String diagnostics;try{diagnostics=previewDiagnostics(sequence);}catch(Throwable unavailable){diagnostics="Private state diagnostics unavailable: "+unavailable;}s.step("Paused overlap private state: "+diagnostics);s.screenshot("qa-transition-blend-failure-"+size);throw new AssertionError("Paused overlap RGB="+java.util.Arrays.toString(previewRgb(sequence))+", position="+s.main(preview(sequence)::getCurrentPosition)+", duration="+s.main(preview(sequence)::getDuration)+", error="+s.main(preview(sequence)::getErrorMessage)+"\n"+diagnostics,failure);}
-        s.screenshot("qa-transition-blend-"+size);seekSequence(500);s.clickDescription(sequence,"Play / Pause");s.await(()->s.main(preview(sequence)::getCurrentPosition)>1100,10000,"Preview clock froze when playback entered the odd-only section");
+        for(int iteration=1;iteration<=2;iteration++){
+            step("cross-clip backward seek iteration "+iteration+"/2");
+            seekSequence(1300);s.await(()->{double[] color=previewRgb(sequence);return color[2]>.65&&color[0]<.2;},15000,"Odd-lane preview did not show the blue clip after the first clip ended, iteration "+iteration);
+            s.screenshot("qa-transition-blue-"+size);seekSequence(800);
+            try{s.await(()->{double[] color=previewRgb(sequence);return color[0]>.25&&color[2]>.25&&color[1]<.2;},15000,"Paused overlap preview did not blend both source clips, iteration "+iteration);}
+            catch(AssertionError failure){String diagnostics;try{diagnostics=previewDiagnostics(sequence);}catch(Throwable unavailable){diagnostics="Private state diagnostics unavailable: "+unavailable;}s.step("Paused overlap private state, iteration "+iteration+": "+diagnostics);s.screenshot("qa-transition-blend-failure-"+size);throw new AssertionError("Paused overlap iteration="+iteration+", RGB="+java.util.Arrays.toString(previewRgb(sequence))+", position="+s.main(preview(sequence)::getCurrentPosition)+", duration="+s.main(preview(sequence)::getDuration)+", error="+s.main(preview(sequence)::getErrorMessage)+"\n"+diagnostics,failure);}
+            s.screenshot("qa-transition-blend-"+size);
+        }
+        seekSequence(500);s.clickDescription(sequence,"Play / Pause");s.await(()->s.main(preview(sequence)::getCurrentPosition)>1100,10000,"Preview clock froze when playback entered the odd-only section");
         s.clickDescription(sequence,"Stop");check(s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,"Transition playback changed project duration");finish(sequence);sequence=null;
         s.await(()->s.main(main::hasWindowFocus)&&s.focusedApplication(s.context.getPackageName(),true),10000,"Main workspace was not restored after early cross-clip preview");ready(main);
     }

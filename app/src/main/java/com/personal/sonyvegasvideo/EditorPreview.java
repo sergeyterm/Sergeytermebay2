@@ -196,7 +196,10 @@ public final class EditorPreview extends FrameLayout {
         try{
             CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application)
                     .setLooper(Looper.getMainLooper()).setPerStreamMediaProgressionEnabled(true);
-            if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
+            if(Build.VERSION.SDK_INT<=30){
+                builder.setVideoGraphFactory(new PreviewVideoGraphFactory(composition.sequences.size()>1))
+                        .experimentalSetLateThresholdToDropInputUs(C.TIME_UNSET);
+            }else if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
             if(view==null)createPlayerView();
             CompositionPlayer current=builder.build();player=current;this.composition=composition;canvasAspect=aspect;view.setPlayer(current);applyCanvasAspect();
             current.addListener(new Player.Listener(){
