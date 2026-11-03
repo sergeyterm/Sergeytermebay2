@@ -7,7 +7,7 @@ import android.view.View;
 public final class VerticalFader extends View {
     public interface Listener{void changed(float gain);}
     private final Paint p=new Paint(3);private float gain=1;private Listener listener;
-    public VerticalFader(Context context){super(context);setContentDescription("Громкость предпросмотра");setTooltipText("Громкость предпросмотра; экспорт сохраняет исходную громкость");}
+    public VerticalFader(Context context){super(context);setContentDescription("Громкость проекта");setTooltipText("Общая громкость предпросмотра и экспортируемого видео");}
     public void listener(Listener value){listener=value;}
     public void gain(float value){gain=Math.max(0,Math.min(1,value));invalidate();}
     @Override protected void onDraw(Canvas c){float d=getResources().getDisplayMetrics().density,x=getWidth()/2f,top=10*d,bottom=getHeight()-12*d,y=bottom-(bottom-top)*gain;

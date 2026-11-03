@@ -1,17 +1,17 @@
-Synthetic device-test fixture: `app/src/androidTest/assets/rotated-av.mp4`.
+# Synthetic Android test media
 
-Generated locally from FFmpeg testsrc2 and sine generators: six seconds, 320×180,
-24 fps, H.264 with a one-second closed GOP and two B-frames, AAC mono 48 kHz.
-The display matrix is a clockwise 90° rotation (FFprobe reports -90).
-No user media is included.
+Generate with `bash tools/make-test-fixture.sh` (FFmpeg >= 6). All files are
+excluded from git and bundled only in the Android test APK, not the editor.
+No user media or downloaded footage is used.
 
-```sh
-ffmpeg -f lavfi -i 'testsrc2=size=320x180:rate=24:duration=6' \
-  -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=6' \
-  -c:v libx264 -pix_fmt yuv420p -g 24 -keyint_min 24 -sc_threshold 0 -bf 2 \
-  -c:a aac -b:a 64k -movflags +faststart fixture.mp4
-ffmpeg -display_rotation:v:0 -90 -i fixture.mp4 -c copy rotated-av.mp4
-```
+| Asset | Video | Audio | Purpose |
+| --- | --- | --- | --- |
+| rotated-av.mp4 | 6 s,320×180,24 fps,H.264,1 s GOP,2 B-frames,90° clockwise display matrix | AAC mono48kHz440Hz | trim,rotation,remux,sequence |
+| chroma-green.mp4 | 2 s,320×180,24 fps;green#00ff00 background,red rectangle x120 y45 w80 h90 | AAC mono48kHz440Hz | chroma/pixel checks |
+| different-av.mp4 | 2 s,240×320,30 fps,H.264 | AAC mono44.1kHz880Hz | mixed input geometry/audio |
+| color-red.mp4 | 2 s,160×90,24 fps,solid red | none | filters,transitions,background |
+| color-blue.mp4 | 2 s,160×90,24 fps,solid blue | none | overlays/compositing |
 
-The fixture is used only by the test APK, never bundled in the editor APK.
-These integration tests have been compiled, but have not yet run on Android.
+All outputs use yuv420p and fast-start MP4. FFprobe reports the clockwise display
+matrix as -90°. The movie presentation duration of rotated-av is exactly6s even
+when an Android extractor reports padding in the video-track duration.

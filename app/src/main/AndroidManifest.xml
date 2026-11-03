@@ -22,5 +22,6 @@
             </intent-filter>
         </activity>
         <activity android:name=".SequenceActivity" android:exported="false" android:resizeableActivity="true" />
+        <provider android:name=".GeneratedMediaProvider" android:authorities="com.personal.sonyvegasvideo.generated" android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>

@@ -14,7 +14,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.widget.VideoView;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.FileOutputStream;
@@ -39,7 +38,7 @@ public final class WorkspaceSmoke {
             activity=test.startActivitySync(intent);test.waitForIdleSync();
             final Activity active=activity;View root=activity.getWindow().getDecorView();
             for(String menu:new String[]{"File","Edit","View","Insert","Tools","Options","Help"})require(findText(root,menu)!=null,"Missing menu "+menu);
-            TimelineView timeline=findClass(root,TimelineView.class);VideoView preview=findClass(root,VideoView.class);
+            TimelineView timeline=findClass(root,TimelineView.class);EditorPreview preview=findClass(root,EditorPreview.class);
             require(timeline!=null&&timeline.getWidth()>100&&timeline.getHeight()>50,"Missing/empty timeline");
             View render=findDescription(root,"Render As… — сохранить MP4");
             await(test,()->render.isEnabled(),45000,"Media did not prepare");

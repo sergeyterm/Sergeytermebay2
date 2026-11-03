@@ -21,6 +21,14 @@ public final class ExportInstrumentation extends Instrumentation {
     @Override public void onCreate(Bundle args) { super.onCreate(args); options=args; start(); }
     @Override public void onStart() {
         Bundle report = new Bundle();
+        String mode=options==null?"":options.getString("mode","");
+        if("full".equals(mode)||"effects".equals(mode)){
+            try{
+                String details="full".equals(mode)?EditorUiChecks.run(this,options.getString("screenshot","wide")):EditedExportChecks.run(this);
+                report.putString("stream","\nPASS: "+details+"\n");finish(-1,report);
+            }catch(Throwable error){report.putString("stream","\nFAIL ["+mode+"]: "+android.util.Log.getStackTraceString(error));finish(0,report);}
+            return;
+        }
         if(options!=null&&"ui".equals(options.getString("mode"))){
             try{WorkspaceSmoke.run(this,options.getString("screenshot","wide"));report.putString("stream","\nPASS: native workspace, media import, loop handles, undo/redo, mute, transport, screenshot\n");finish(-1,report);}
             catch(Throwable error){report.putString("stream","\nFAIL: "+android.util.Log.getStackTraceString(error));finish(0,report);}return;

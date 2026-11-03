@@ -10,8 +10,8 @@ android {
         applicationId 'com.personal.sonyvegasvideo'
         minSdk 29
         targetSdk 35
-        versionCode 6
-        versionName '2.3'
+        versionCode 7
+        versionName '2.4'
         testInstrumentationRunner 'com.personal.sonyvegasvideo.ExportInstrumentation'
     }
 
@@ -21,20 +21,34 @@ android {
     }
 
     signingConfigs {
-        debug {
-            storeFile rootProject.file('signing/vegas-debug.keystore').exists() ? rootProject.file('signing/vegas-debug.keystore') : file(System.getProperty('user.home') + '/.android/debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+        if (rootProject.file('signing/vegas-debug.keystore').exists()) {
+            personal {
+                storeFile rootProject.file('signing/vegas-debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
         }
     }
 
     buildTypes {
         debug {
             minifyEnabled false
+            if (rootProject.file('signing/vegas-debug.keystore').exists()) {
+                signingConfig signingConfigs.personal
+            }
         }
         release {
             minifyEnabled false
         }
     }
+    testOptions { animationsDisabled true }
+}
+
+dependencies {
+    implementation 'androidx.media3:media3-common:1.8.0'
+    implementation 'androidx.media3:media3-exoplayer:1.8.0'
+    implementation 'androidx.media3:media3-ui:1.8.0'
+    implementation 'androidx.media3:media3-effect:1.8.0'
+    implementation 'androidx.media3:media3-transformer:1.8.0'
 }
