@@ -152,7 +152,7 @@ run_case() {
         collect_private "$NAME"
         adb exec-out screencap -p > "$OUT/screenshots/failure-$NAME.png" 2>/dev/null || true
         adb logcat -d -v threadtime > "$OUT/$NAME-logcat.txt" 2>&1 || true
-        grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)' "$OUT/$NAME-logcat.txt" | tail -200 || true
+        grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)| [ID] VegasFrames' "$OUT/$NAME-logcat.txt" | tail -200 || true
         adb shell am force-stop "$PACKAGE" || true
         return 1
     fi
@@ -161,7 +161,7 @@ run_case() {
         collect_private "$NAME"
         adb exec-out screencap -p > "$OUT/screenshots/failure-$NAME.png" 2>/dev/null || true
         adb logcat -d -v threadtime > "$OUT/$NAME-logcat.txt" 2>&1 || true
-        grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)' "$OUT/$NAME-logcat.txt" | tail -200 || true
+        grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)| [ID] VegasFrames' "$OUT/$NAME-logcat.txt" | tail -200 || true
         adb shell am force-stop "$PACKAGE" || true
         return 1
     fi

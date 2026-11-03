@@ -110,7 +110,7 @@ public final class VideoEffects {
         @Override public GlShaderProgram toGlShaderProgram(Context context,boolean hdr)throws VideoFrameProcessingException{return new FrameProgram(spec,duration,origin,fadeIn,fadeOut,alphaOnly,hdr);}
     }
     private static final class FrameProgram extends BaseGlShaderProgram {
-        private final GlProgram program;private final EffectSpec spec;private final long duration,origin,fadeIn,fadeOut;private final boolean alphaOnly;private int width,height;
+        private final GlProgram program;private final EffectSpec spec;private final long duration,origin,fadeIn,fadeOut;private final boolean alphaOnly;private int width,height,maskDiagnosticFrames;
         FrameProgram(EffectSpec spec,long duration,long origin,long fadeIn,long fadeOut,boolean alphaOnly,boolean hdr)throws VideoFrameProcessingException{
             super(hdr,1);this.spec=spec;this.duration=duration;this.origin=origin;this.fadeIn=fadeIn;this.fadeOut=fadeOut;this.alphaOnly=alphaOnly;
             try{
@@ -133,6 +133,9 @@ public final class VideoEffects {
                     if(fadeIn<0&&fadeOut<0){long fade=Math.max(1,Math.min(spec.transitionMs*1000L,duration/2));edge=Math.min(local/(float)fade,(duration-local)/(float)fade);}
                     else{if(fadeIn>0)edge=Math.min(edge,local/(float)fadeIn);if(fadeOut>0)edge=Math.min(edge,(duration-local)/(float)fadeOut);}
                     edge=Math.max(0,Math.min(1,edge));
+                }
+                if(alphaOnly&&maskDiagnosticFrames<6){
+                    android.util.Log.i("VegasFrames","mask="+Integer.toHexString(System.identityHashCode(this))+" frame="+(++maskDiagnosticFrames)+" ptsUs="+time+" originUs="+origin+" durationUs="+duration+" fadeInUs="+fadeIn+" fadeOutUs="+fadeOut+" edge="+edge+" transition="+spec.transition);
                 }
                 program.setFloatUniform("uProgress",edge);program.bindAttributesAndUniforms();GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP,0,4);GlUtil.checkGlError();
             }catch(GlUtil.GlException error){throw new VideoFrameProcessingException(error,time);}

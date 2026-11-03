@@ -38,7 +38,9 @@ public final class EditorPreview extends FrameLayout {
     private int queuedSeek=-1;
     private Runnable seekReload;
     private int duration,pendingPosition,effectStart,effectEnd=-1;
-    private long generation,seekSerial;
+    private volatile long generation;
+    private long seekSerial;
+    private volatile long firstPresentedUs=-1,lastPresentedUs=-1;
     private float volume=1,speed=1,canvasAspect;
     private int resizeMode=AspectRatioFrameLayout.RESIZE_MODE_FIT;
     private String errorMessage="";
@@ -216,6 +218,15 @@ public final class EditorPreview extends FrameLayout {
             duration=Math.max(0,knownDuration);
             pendingPosition=Math.max(0,duration>0?Math.min(initial,duration-1):initial);
             MediaPipeline.seekAudio(composition,pendingPosition*1000L);
+            final int requestedInitialMs=pendingPosition;final int[] presentedCount={0};
+            firstPresentedUs=lastPresentedUs=-1;
+            current.setVideoFrameMetadataListener((presentationTimeUs,releaseTimeNs,format,mediaFormat)->{
+                if(ticket!=generation)return;
+                if(presentedCount[0]==0)firstPresentedUs=presentationTimeUs;
+                lastPresentedUs=presentationTimeUs;
+                if(requestedInitialMs>0&&presentedCount[0]<4)Log.i("VegasFrames","Presented frame generation="+ticket+" requestedMs="+requestedInitialMs+" index="+presentedCount[0]+" ptsUs="+presentationTimeUs);
+                presentedCount[0]++;
+            });
             current.setComposition(composition,Math.max(0,Math.round(pendingPosition/speed)));current.setVolume(volume);
             current.prepare();
             if(wantPlay)current.play();

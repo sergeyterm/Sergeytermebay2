@@ -229,7 +229,7 @@ final class EditorUiChecks {
     private String previewDiagnostics(Activity activity){
         PreviewSnapshot snapshot=s.main(()->{
             PreviewSnapshot captured=new PreviewSnapshot();EditorPreview editor=NativeTestSupport.findClass(activity.getWindow().getDecorView(),EditorPreview.class);
-            captured.text.append("EditorPreview{");for(String name:new String[]{"ready","wantPlay","released","preparedNotified","seekInFlight","queuedSeek","duration","pendingPosition","effectStart","effectEnd","generation","seekSerial","volume","speed","canvasAspect","resizeMode","errorMessage"}){
+            captured.text.append("EditorPreview{");for(String name:new String[]{"ready","wantPlay","released","preparedNotified","seekInFlight","queuedSeek","duration","pendingPosition","effectStart","effectEnd","generation","seekSerial","firstPresentedUs","lastPresentedUs","volume","speed","canvasAspect","resizeMode","errorMessage"}){
                 try{captured.text.append(name).append('=').append(privateField(editor,name)).append(',');}catch(Exception missing){captured.text.append(name).append("=unavailable,");}
             }
             try{captured.text.append("seekReloadScheduled=").append(privateField(editor,"seekReload")!=null);}catch(Exception missing){captured.text.append("seekReloadScheduled=unavailable");}captured.text.append("}");
