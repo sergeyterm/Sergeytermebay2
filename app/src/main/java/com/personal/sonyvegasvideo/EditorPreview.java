@@ -32,9 +32,10 @@ public final class EditorPreview extends FrameLayout {
     private EffectSpec settings=new EffectSpec();
     private Sequence sequence;
     private Uri source;
-    private boolean muted,ready,wantPlay,released,preparedNotified;
+    private boolean muted,ready,wantPlay,released,preparedNotified,seekInFlight;
+    private int queuedSeek=-1;
     private int duration,pendingPosition,effectStart,effectEnd=-1;
-    private long generation;
+    private long generation,seekSerial;
     private float volume=1,speed=1,canvasAspect;
     private String errorMessage="";
 
@@ -83,7 +84,7 @@ public final class EditorPreview extends FrameLayout {
         return Math.max(0,duration);
     }
     public int getCurrentPosition(){
-        if(player!=null&&ready)try{pendingPosition=(int)Math.min(Integer.MAX_VALUE,Math.max(0,Math.round(player.getCurrentPosition()*speed)));}catch(RuntimeException ignored){}
+        if(player!=null&&ready&&!seekInFlight&&queuedSeek<0)try{pendingPosition=(int)Math.min(Integer.MAX_VALUE,Math.max(0,Math.round(player.getCurrentPosition()*speed)));}catch(RuntimeException ignored){}
         return Math.max(0,pendingPosition);
     }
     public boolean isPlaying(){try{return player!=null&&ready&&player.isPlaying();}catch(RuntimeException ignored){return false;}}
@@ -94,7 +95,24 @@ public final class EditorPreview extends FrameLayout {
     public void pause(){wantPlay=false;if(player!=null)try{player.pause();}catch(RuntimeException ignored){}}
     public void seekTo(int position){
         pendingPosition=Math.max(0,duration>0?Math.min(position,duration):position);
-        if(player!=null)try{if(composition!=null)MediaPipeline.seekAudio(composition,pendingPosition*1000L);player.seekTo(Math.max(0,Math.round(pendingPosition/speed)));}catch(RuntimeException e){fail(e,generation);}
+        queuedSeek=pendingPosition;drainSeek();
+    }
+    private void drainSeek(){
+        if(player==null||!ready||seekInFlight||queuedSeek<0)return;
+        try{
+            int state=player.getPlaybackState();if(state!=Player.STATE_READY&&state!=Player.STATE_ENDED)return;
+            int target=queuedSeek;queuedSeek=-1;
+            // Repeating the same seek from prepare/listener/UI unnecessarily flushes
+            // CompositionPlayer's video graph. Serialize new seeks until it is ready.
+            if(Math.abs(player.getCurrentPosition()*speed-target)<=2)return;
+            seekInFlight=true;
+            if(composition!=null)MediaPipeline.seekAudio(composition,target*1000L);
+            player.seekTo(Math.max(0,Math.round(target/speed)));
+            final long ticket=generation,request=++seekSerial;
+            main.postDelayed(()->{
+                if(!released&&ticket==generation&&request==seekSerial&&player!=null&&seekInFlight&&player.getPlaybackState()==Player.STATE_READY){seekInFlight=false;drainSeek();}
+            },120);
+        }catch(RuntimeException e){fail(e,generation);}
     }
     public void seekTo(long position,int ignoredMode){seekTo((int)Math.min(Integer.MAX_VALUE,Math.max(0,position)));}
     public void setVolume(float left,float right){volume=Math.max(0,Math.min(1,(left+right)/2));if(player!=null)try{player.setVolume(volume);}catch(RuntimeException ignored){}}
@@ -142,19 +160,20 @@ public final class EditorPreview extends FrameLayout {
                 @Override public void onPlaybackStateChanged(int state){
                     if(ticket!=generation||player!=current||released)return;
                     if(state==Player.STATE_READY){
-                        ready=true;getDuration();applyCanvasAspect();
+                        ready=true;seekInFlight=false;getDuration();applyCanvasAspect();
                         if(!preparedNotified){preparedNotified=true;seekTo(pendingPosition);if(preparedListener!=null)preparedListener.accept(EditorPreview.this);}
                         if(ticket!=generation||player!=current||released)return;
+                        drainSeek();
                         if(wantPlay)current.play();
                     }else if(state==Player.STATE_ENDED){ready=true;pendingPosition=getDuration();wantPlay=false;if(completionListener!=null)completionListener.accept(EditorPreview.this);}
                 }
                 @Override public void onPlayerError(PlaybackException error){fail(error,ticket);}
             });
             current.setComposition(composition);current.setVolume(volume);current.prepare();
-            if(pendingPosition>0)current.seekTo(Math.round(pendingPosition/speed));if(wantPlay)current.play();
+            if(wantPlay)current.play();
         }catch(RuntimeException error){fail(error,ticket);}
     }
-    private void releasePlayer(){CompositionPlayer old=player;player=null;composition=null;view.setPlayer(null);if(old!=null)try{old.release();}catch(RuntimeException ignored){}}
+    private void releasePlayer(){CompositionPlayer old=player;player=null;composition=null;seekInFlight=false;queuedSeek=-1;view.setPlayer(null);if(old!=null)try{old.release();}catch(RuntimeException ignored){}}
     private void fail(Throwable error,long ticket){
         if(released||ticket!=generation)return;ready=false;wantPlay=false;
         String detail=error.getMessage();errorMessage="Не удалось открыть предпросмотр. "+(detail==null?"Импортируйте исправный локальный файл повторно.":detail);

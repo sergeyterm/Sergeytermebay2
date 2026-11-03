@@ -103,6 +103,7 @@ public final class ExportJob {
                     temporary=path;
                     try{
                         transformer=new Transformer.Builder(context).setLooper(Looper.getMainLooper())
+                                .setMuxerFactory(new TimelineMuxerFactory(durationUs))
                                 .setVideoMimeType(MimeTypes.VIDEO_H264).setAudioMimeType(MimeTypes.AUDIO_AAC).setPortraitEncodingEnabled(true)
                                 .addListener(new Transformer.Listener(){
                                     @Override public void onCompleted(Composition completed,ExportResult exportResult){

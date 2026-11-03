@@ -340,6 +340,8 @@ public final class SequenceActivity extends Activity {
         remember();
         restore(value);
         preview.pause();
+        prepared=false;
+        previewStopped=false;
         refresh();
         persist();
         loadPreview(false);
@@ -366,6 +368,9 @@ public final class SequenceActivity extends Activity {
             to.addLast(current);
             while(to.size()>HISTORY_LIMIT)to.removeFirst();
             restore(value);
+            preview.pause();
+            prepared=false;
+            previewStopped=false;
             refresh();
             persist();
             loadPreview(false);
@@ -473,7 +478,8 @@ public final class SequenceActivity extends Activity {
                     if(isDestroyed()||token!=operation)return;
                     busy=false;updateControls();
                     if(sequence!=before)return;
-                    showTrim(index,clip,duration);
+                    if(!isFinishing()&&resumed)showTrim(index,clip,duration);
+                    else status("Выбор границ отменён при выходе с экрана. Откройте его повторно после возвращения.");
                 });
             } catch(Exception error) {
                 runOnUiThread(()->{if(!isDestroyed()&&token==operation){busy=false;status("Границы: "+detail(error));updateControls();}});
@@ -481,6 +487,7 @@ public final class SequenceActivity extends Activity {
         });
     }
     private void showTrim(int index,Sequence.Clip clip,int duration) {
+        if(isFinishing()||isDestroyed()||!resumed)return;
         LinearLayout form=column();
         form.setPadding(dp(16),dp(8),dp(16),dp(8));
         form.addView(text("Начало · ЧЧ:ММ:СС.мс",12));

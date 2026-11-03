@@ -100,8 +100,10 @@ final class NativeTestSupport implements AutoCloseable {
     void windowDescriptionClick(String description){await(()->node(description,true)!=null,5000,"Missing dialog action "+description);AccessibilityNodeInfo item=node(description,true);require(item.isEnabled()&&item.performAction(AccessibilityNodeInfo.ACTION_CLICK),"Cannot click dialog action "+description);settle();}
     void setProgressField(String description,float value){AccessibilityNodeInfo item=node(description,true);require(item!=null,"Missing slider "+description);Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,value);require(item.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(),args),"Cannot adjust slider "+description);settle();}
     void setEditable(int index,String value){
-        List<AccessibilityNodeInfo> nodes=new ArrayList<>();collectEditable(test.getUiAutomation().getRootInActiveWindow(),nodes);require(index<nodes.size(),"Missing editable #"+index+" "+windowText());
-        Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);require(nodes.get(index).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args),"Cannot edit field #"+index);test.waitForIdleSync();
+        final AccessibilityNodeInfo[] selected=new AccessibilityNodeInfo[1];
+        await(()->{selected[0]=editable(index);return selected[0]!=null;},8000,"Missing editable #"+index);
+        Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);require(selected[0].performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args),"Cannot edit field #"+index);settle();
+        await(()->{AccessibilityNodeInfo actual=editable(index);return actual!=null&&value.contentEquals(actual.getText()==null?"":actual.getText());},5000,"Editable #"+index+" did not accept text "+value);
     }
     void back(){test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);settle();}
     void dismissIfPresent(String value){settle();if(hasText(value))windowClick(value);}
@@ -118,7 +120,13 @@ final class NativeTestSupport implements AutoCloseable {
     private AccessibilityNodeInfo node(String value,boolean description){return findNode(activeRoot(),value,description);}
     private static AccessibilityNodeInfo findNode(AccessibilityNodeInfo node,String value,boolean description){if(node==null)return null;CharSequence text=description?node.getContentDescription():node.getText();if(text!=null&&(description?value.contentEquals(text):value.trim().equalsIgnoreCase(text.toString().trim())))return node;for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo found=findNode(node.getChild(i),value,description);if(found!=null)return found;}return null;}
     private static void collectText(AccessibilityNodeInfo node,StringBuilder out,int depth){if(node==null||depth>25||out.length()>7000)return;if(node.getText()!=null)out.append(node.getText()).append(" | ");for(int i=0;i<node.getChildCount();i++)collectText(node.getChild(i),out,depth+1);}
-    private static void collectEditable(AccessibilityNodeInfo node,List<AccessibilityNodeInfo> out){if(node==null)return;if(node.isEditable())out.add(node);for(int i=0;i<node.getChildCount();i++)collectEditable(node.getChild(i),out);}
+    private AccessibilityNodeInfo editable(int index){
+        List<android.view.accessibility.AccessibilityWindowInfo> windows=new ArrayList<>(test.getUiAutomation().getWindows());
+        java.util.Collections.sort(windows,(a,b)->Integer.compare(b.getLayer(),a.getLayer()));
+        for(android.view.accessibility.AccessibilityWindowInfo window:windows){if(window.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION)continue;AccessibilityNodeInfo root=window.getRoot();if(root==null||!context.getPackageName().contentEquals(root.getPackageName()==null?"":root.getPackageName()))continue;List<AccessibilityNodeInfo> nodes=new ArrayList<>();collectEditable(root,nodes);if(index<nodes.size())return nodes.get(index);}
+        List<AccessibilityNodeInfo> nodes=new ArrayList<>();collectEditable(activeRoot(),nodes);return index<nodes.size()?nodes.get(index):null;
+    }
+    private static void collectEditable(AccessibilityNodeInfo node,List<AccessibilityNodeInfo> out){if(node==null)return;boolean setText=false;for(AccessibilityNodeInfo.AccessibilityAction action:node.getActionList())if(action.getId()==AccessibilityNodeInfo.ACTION_SET_TEXT){setText=true;break;}if(node.isEnabled()&&setText)out.add(node);for(int i=0;i<node.getChildCount();i++)collectEditable(node.getChild(i),out);}
     Set<String> movieRows(){
         Set<String> rows=new HashSet<>();Bundle args=new Bundle();args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION,"relative_path = ?");args.putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,new String[]{"Movies/Sony Vegas Video/"});args.putInt(MediaStore.QUERY_ARG_MATCH_PENDING,MediaStore.MATCH_INCLUDE);
         try(android.database.Cursor cursor=context.getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,new String[]{"_id"},args,null)){if(cursor!=null)while(cursor.moveToNext())rows.add(cursor.getString(0));}return rows;
