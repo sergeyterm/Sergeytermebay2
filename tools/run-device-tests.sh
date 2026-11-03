@@ -22,18 +22,42 @@ ORIGINAL_FONT_SCALE="$(adb shell settings get system font_scale | tr -d '\r')"
 ORIGINAL_ACCELEROMETER_ROTATION="$(adb shell settings get system accelerometer_rotation | tr -d '\r')"
 ORIGINAL_USER_ROTATION="$(adb shell settings get system user_rotation | tr -d '\r')"
 DISPLAY_CHANGED=0
+collect_private() {
+    local LABEL="${1:-final}" FILE DEST TEMP
+    local COPIED=0
+    local LIST="$OUT/private-files-${1:-final}.txt"
+    # Keep a per-case manifest so a later cancelled emulator cannot erase proof
+    # that was copied while adb was still available.
+    if ! adb shell run-as "$PACKAGE" ls files > "$LIST" 2>> "$OUT/private-transfer-errors.txt"; then
+        echo "$LABEL: cannot list app-private files" >> "$OUT/private-transfer-errors.txt"
+        return 0
+    fi
+    while IFS= read -r FILE; do
+        FILE="${FILE%$'\r'}"
+        DEST=''
+        if [[ "$FILE" =~ ^(ui|qa|effect)[A-Za-z0-9._-]*\.png$ ]]; then
+            DEST="$OUT/screenshots/$FILE"
+        elif [[ "$FILE" =~ ^effect-failed-[A-Za-z0-9._-]+\.(mp4|txt)$ ]]; then
+            DEST="$OUT/diagnostics/$FILE"
+        fi
+        [[ -n "$DEST" ]] || continue
+        TEMP="$OUT/.private-$FILE.tmp"
+        if adb exec-out run-as "$PACKAGE" cat "files/$FILE" > "$TEMP" 2>> "$OUT/private-transfer-errors.txt" && [[ -s "$TEMP" ]]; then
+            mv "$TEMP" "$DEST"
+            echo "$LABEL: copied $FILE" >> "$OUT/private-transfers.txt"
+            COPIED=$((COPIED+1))
+        else
+            rm -f "$TEMP"
+            echo "$LABEL: could not copy $FILE; earlier copy preserved" >> "$OUT/private-transfer-errors.txt"
+        fi
+    done < "$LIST"
+    echo "Captured private diagnostics ($LABEL): $COPIED files"
+}
 collect() {
     adb logcat -d -v threadtime > "$OUT/logcat.txt" 2>&1 || true
     adb shell dumpsys activity activities > "$OUT/activities.txt" 2>&1 || true
     adb exec-out screencap -p > "$OUT/screenshots/last-screen.png" 2>/dev/null || true
-    while IFS= read -r FILE; do
-        FILE="${FILE%$'\r'}"
-        if [[ "$FILE" =~ ^(ui|qa|effect)[A-Za-z0-9._-]*\.png$ ]]; then
-            adb exec-out run-as "$PACKAGE" cat "files/$FILE" > "$OUT/screenshots/$FILE" 2>/dev/null || true
-        elif [[ "$FILE" =~ ^effect-failed-[A-Za-z0-9._-]+\.(mp4|txt)$ ]]; then
-            adb exec-out run-as "$PACKAGE" cat "files/$FILE" > "$OUT/diagnostics/$FILE" 2>/dev/null || true
-        fi
-    done < <(adb shell run-as "$PACKAGE" ls files 2>/dev/null || true)
+    collect_private final
 }
 restore_setting() {
     if [[ "$2" == null || -z "$2" ]]; then adb shell settings delete system "$1" >/dev/null; else adb shell settings put system "$1" "$2"; fi
@@ -125,6 +149,7 @@ run_case() {
     echo "Running $NAME"
     if ! "${TIMEOUT[@]}" adb shell am instrument -w -r "$@" "$RUNNER" 2>&1 | tee "$LOG"; then
         echo "$NAME: command failed or timed out" | tee -a "$OUT/summary.txt"
+        collect_private "$NAME"
         adb exec-out screencap -p > "$OUT/screenshots/failure-$NAME.png" 2>/dev/null || true
         adb logcat -d -v threadtime > "$OUT/$NAME-logcat.txt" 2>&1 || true
         grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)' "$OUT/$NAME-logcat.txt" | tail -200 || true
@@ -133,6 +158,7 @@ run_case() {
     fi
     if ! grep -q 'PASS:' "$LOG" || ! grep -q '^INSTRUMENTATION_CODE: -1' "$LOG"; then
         echo "$NAME: FAIL (see $NAME.txt)" | tee -a "$OUT/summary.txt"
+        collect_private "$NAME"
         adb exec-out screencap -p > "$OUT/screenshots/failure-$NAME.png" 2>/dev/null || true
         adb logcat -d -v threadtime > "$OUT/$NAME-logcat.txt" 2>&1 || true
         grep -E ' [EF] (VegasPreview|CompositionPlayer(-[0-9]+)?|ExoPlayerImplInternal|DefaultVideoFrameProcessor|VideoFrameProcessingTaskExecutor)' "$OUT/$NAME-logcat.txt" | tail -200 || true
@@ -140,6 +166,7 @@ run_case() {
         return 1
     fi
     echo "$NAME: PASS" | tee -a "$OUT/summary.txt"
+    if [[ "$NAME" == full-* ]]; then collect_private "$NAME"; fi
 }
 : > "$OUT/summary.txt"
 run_case regression 300 || FAILURES=$((FAILURES+1))

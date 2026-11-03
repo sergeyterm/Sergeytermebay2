@@ -34,7 +34,7 @@ public final class EditorPreview extends FrameLayout {
     private EffectSpec settings=new EffectSpec();
     private Sequence sequence;
     private Uri source;
-    private boolean muted,ready,wantPlay,released,preparedNotified,seekInFlight;
+    private boolean muted,ready,wantPlay,released,suspended,preparedNotified,seekInFlight;
     private int queuedSeek=-1;
     private Runnable seekReload;
     private int duration,pendingPosition,effectStart,effectEnd=-1;
@@ -154,6 +154,18 @@ public final class EditorPreview extends FrameLayout {
         if(speed==rate)return true;int position=getCurrentPosition();boolean play=isPlaying();speed=rate;pendingPosition=position;wantPlay=play;reload();return true;
     }
     private boolean hasLayers(){return !settings.audioUri.isEmpty()||!settings.overlayUri.isEmpty()||(sequence!=null&&sequence.clips.size()>1&&!settings.transition.equals("none"));}
+    /** Release hidden video/audio resources while retaining the editable project. */
+    public void suspend(){
+        if(released||suspended)return;
+        pendingPosition=getCurrentPosition();wantPlay=false;suspended=true;generation++;
+        releasePlayer();ready=false;
+        if(worker!=null){worker.shutdownNow();worker=null;}
+    }
+    /** Recreate the visible preview at its saved cursor, without restarting playback. */
+    public void resume(){
+        if(released||!suspended)return;
+        boolean notifyPrepared=!preparedNotified;suspended=false;wantPlay=false;reload(notifyPrepared);
+    }
     /** Clear the source and release codecs. The view remains reusable for a new project. */
     public void stopPlayback(){
         generation++;releasePlayer();source=null;sequence=null;ready=false;wantPlay=false;duration=0;pendingPosition=0;effectStart=0;effectEnd=-1;speed=1;
@@ -164,6 +176,7 @@ public final class EditorPreview extends FrameLayout {
     private void reload(){reload(true);}
     private void reload(boolean notifyPrepared){
         if(released||(source==null&&(sequence==null||sequence.clips.isEmpty())))return;
+        if(suspended){if(notifyPrepared)preparedNotified=false;return;}
         final long ticket=++generation;final Uri selected=source;final Sequence project=sequence;
         final EffectSpec spec=settings.copy();spec.masterGain=1;final boolean mute=muted;final float rate=speed;final int from=effectStart,to=effectEnd;
         releasePlayer();ready=false;preparedNotified=!notifyPrepared;errorMessage="";
@@ -219,7 +232,7 @@ public final class EditorPreview extends FrameLayout {
         if(old!=null)try{old.release();}catch(RuntimeException error){Log.w("VegasPreview","Previous preview release failed",error);}
     }
     private void fail(Throwable error,long ticket){
-        if(released||ticket!=generation)return;ready=false;wantPlay=false;
+        if(released||ticket!=generation)return;ready=false;wantPlay=false;preparedNotified=false;
         Log.e("VegasPreview","Composition preview failed (generation "+ticket+")",error);
         String detail=error.getMessage();errorMessage="Не удалось открыть предпросмотр. "+(detail==null?"Импортируйте исправный локальный файл повторно.":detail);
         releasePlayer();if(errorListener!=null)errorListener.onError(this,error instanceof PlaybackException?((PlaybackException)error).errorCode:-1,0);

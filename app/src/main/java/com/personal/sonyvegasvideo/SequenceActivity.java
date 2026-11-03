@@ -850,6 +850,7 @@ public final class SequenceActivity extends Activity {
     @Override protected void onStart(){super.onStart();job.attach(jobListener);}
     @Override protected void onResume() {
         super.onResume();resumed=true;
+        preview.resume();
         if(previewStopped&&!job.running&&!busy)loadPreview(false);
         handler.removeCallbacks(tick);handler.post(tick);
     }
@@ -858,7 +859,7 @@ public final class SequenceActivity extends Activity {
     }
     @Override protected void onStop() {
         job.detach(jobListener);
-        preview.stopPlayback();previewStopped=true;prepared=false;
+        preview.suspend();
         super.onStop();
     }
     @Override protected void onDestroy() {
