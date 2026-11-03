@@ -118,7 +118,7 @@ final class EditorUiChecks {
         s.clickDescription(main,"Монтаж: разрезать, удалить и склеить");sequence=s.test.waitForMonitorWithTimeout(sequenceMonitor,15000);s.test.removeMonitor(sequenceMonitor);check(sequence!=null,"Timeline editor did not open");sequenceReady();
         for(String name:new String[]{"File","Edit","View","Insert","Tools","Help"}){s.clickText(sequence,name);check(!s.windowText().isEmpty(),"Empty sequence menu "+name);s.back();}
         SequenceTimeline timeline=s.main(()->NativeTestSupport.findClass(sequence.getWindow().getDecorView(),SequenceTimeline.class));check(timeline!=null,"Missing sequence timeline");
-        s.main(()->{Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,900);check(timeline.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_PROGRESS,args),"Accessible exact seek not supported");return null;});
+        s.main(()->{Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,900);check(timeline.performAccessibilityAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(),args),"Accessible exact seek not supported");return null;});
         s.clickDescription(sequence,"Разрезать в позиции курсора (S)");s.await(()->eventCount()==2,10000,"Exact split did not create two events");
         ProjectCodec.Project split=saveSequence(sequenceSave);check(split.sequence.clips.get(0).length()==900,"Split rounded away from requested project cursor");
         s.clickDescription(sequence,"Undo");s.await(()->eventCount()==1,5000,"Sequence undo failed");s.clickDescription(sequence,"Redo");s.await(()->eventCount()==2,5000,"Sequence redo failed");

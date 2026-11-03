@@ -10,7 +10,7 @@ TEST="${VEGAS_TEST_APK:-$PROJECT/build/device-tests/VegasVideo_device_tests.apk}
 [[ -f "$APP" && -f "$TEST" ]] || { echo 'Build/download both APKs first.' >&2; exit 1; }
 adb wait-for-device
 adb install -r "$APP"
-adb install -r "$TEST"
+adb install -r -t "$TEST"
 adb logcat -c
 FAILURES=0
 collect() {
