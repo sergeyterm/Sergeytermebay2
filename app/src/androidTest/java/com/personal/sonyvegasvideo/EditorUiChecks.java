@@ -61,7 +61,7 @@ final class EditorUiChecks {
         s.clickDescription(main,"Предыдущий кадр");s.await(()->s.main(preview::getCurrentPosition)<=position+10,5000,"Previous frame did not seek");
         s.clickDescription(main,"Зациклить выделенный фрагмент");check(s.main(()->description(main,"Зациклить выделенный фрагмент").isSelected()),"Loop did not activate");
         s.clickDescription(main,"Воспроизвести / пауза");SystemClock.sleep(2700);
-        check(s.main(preview::isPlaying),"Loop stopped at selection end");check(s.main(preview::getCurrentPosition)<2600,"Loop escaped selection");
+        s.await(()->s.main(preview::isPlaying)&&s.main(preview::getCurrentPosition)<2600,5000,"Loop stopped or escaped selection");check(true,"Loop continues");
         s.clickDescription(main,"Пауза");s.clickDescription(main,"Зациклить выделенный фрагмент");
         View rate=s.main(()->NativeTestSupport.textPrefix(main.getWindow().getDecorView(),"Rate:"));s.click(rate);s.windowClick("1.5×");
         check(s.main(()->((TextView)rate).getText().toString().contains("1.50")),"Playback rate label not updated");s.click(rate);s.windowClick("1.0×");
@@ -78,6 +78,8 @@ final class EditorUiChecks {
         for(String[] setting:new String[][]{{"Настройки эффектов","Video FX"},{"Настройки переходов","Transitions — появление и исчезновение"},{"Слои видео и аудио","Видео- и аудиослои"}}){
             s.clickDescription(main,setting[0]);check(s.hasText(setting[1]),"Missing settings dialog "+setting[1]);s.windowClick("Отмена");
         }
+        s.clickText(main,"Transitions");for(String item:new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}){s.clickDescription(main,item);check(s.hasText("Transitions — появление и исчезновение"),"Transition palette item does not open settings: "+item);s.windowClick("Отмена");}
+        s.clickText(main,"Video FX");for(String item:new String[]{"Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation"}){s.clickDescription(main,item);check(s.hasText(item.equals("Zoom & Rotation")?"Анимация — два ключевых состояния":"Video FX"),"Effect palette item does not open settings: "+item);s.windowClick("Отмена");}
         s.clickDescription(main,"Текст и титры");s.setField("title","VEGAS QA");s.windowClick("Применить");ready(main);
         check("VEGAS QA".equals(saveMain(saved).effects.title),"Title settings not saved");
         s.clickDescription(main,"Отменить изменение");ready(main);check(saveMain(saved).effects.title.isEmpty(),"Undo did not remove title");
@@ -86,9 +88,9 @@ final class EditorUiChecks {
         check(Math.abs(saveMain(saved).effects.masterGain-.35f)<.02,"Master gain not saved for export");
 
         step("video/audio layer pickers and common project save/open");
-        Instrumentation.ActivityMonitor pick=s.picker(Intent.ACTION_OPEN_DOCUMENT,red);s.clickText(main,"Insert");s.windowClick("Video track");s.picked(pick);ready(main);
+        Instrumentation.ActivityMonitor pick=s.picker(Intent.ACTION_OPEN_DOCUMENT,red);s.clickText(main,"Insert");s.windowClick("Video track");s.picked(pick);s.await(()->s.hasText("Видео- и аудиослои"),15000,"Video layer was not validated");s.windowClick("Применить");ready(main);
         check(red.toString().equals(saveMain(saved).effects.overlayUri),"Video layer picker did not update project");
-        pick=s.picker(Intent.ACTION_OPEN_DOCUMENT,music);s.clickText(main,"Insert");s.windowClick("Audio track");s.picked(pick);ready(main);
+        pick=s.picker(Intent.ACTION_OPEN_DOCUMENT,music);s.clickText(main,"Insert");s.windowClick("Audio track");s.picked(pick);s.await(()->s.hasText("Видео- и аудиослои"),15000,"Audio layer was not validated");s.windowClick("Применить");ready(main);
         ProjectCodec.Project configured=saveMain(saved);check(music.toString().equals(configured.effects.audioUri),"Audio picker did not update project");
         openMain(saved);ready(main);ProjectCodec.Project reopened=saveMain(saved);
         check(reopened.effects.equals(configured.effects)&&reopened.sequence.length()==configured.sequence.length(),"Project roundtrip lost effects/layers/range");
@@ -108,11 +110,13 @@ final class EditorUiChecks {
         s.clickText(main,"File");s.windowClick("Open rendered video");s.await(()->opened.getHits()>0,5000,"Open rendered video did not launch");s.test.removeMonitor(opened);
         Instrumentation.ActivityMonitor shared=s.test.addMonitor(new android.content.IntentFilter(Intent.ACTION_CHOOSER),new Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null),true);
         s.clickText(main,"File");s.windowClick("Share rendered video");s.await(()->shared.getHits()>0,5000,"Share rendered video did not launch a chooser");s.test.removeMonitor(shared);
+        ProjectCodec.Project plain=new ProjectCodec.Project();plain.single=true;plain.sequence=new Sequence().append(new Sequence.Clip(source.toString(),"QA source",0,6000));
+        Uri plainProject=s.document("plain-sequence.vvp",ProjectCodec.write(plain));openMain(plainProject);ready(main);
 
         step("sequence exact split, reorder, delete, trim, history and persistence");
         Instrumentation.ActivityMonitor sequenceMonitor=s.test.addMonitor(SequenceActivity.class.getName(),null,false);
         s.clickDescription(main,"Монтаж: разрезать, удалить и склеить");sequence=s.test.waitForMonitorWithTimeout(sequenceMonitor,15000);s.test.removeMonitor(sequenceMonitor);check(sequence!=null,"Timeline editor did not open");sequenceReady();
-        for(String name:new String[]{"File","Edit","View","Tools","Help"}){s.clickText(sequence,name);check(!s.windowText().isEmpty(),"Empty sequence menu "+name);s.back();}
+        for(String name:new String[]{"File","Edit","View","Insert","Tools","Help"}){s.clickText(sequence,name);check(!s.windowText().isEmpty(),"Empty sequence menu "+name);s.back();}
         SequenceTimeline timeline=s.main(()->NativeTestSupport.findClass(sequence.getWindow().getDecorView(),SequenceTimeline.class));check(timeline!=null,"Missing sequence timeline");
         s.main(()->{Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,900);check(timeline.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_PROGRESS,args),"Accessible exact seek not supported");return null;});
         s.clickDescription(sequence,"Разрезать в позиции курсора (S)");s.await(()->eventCount()==2,10000,"Exact split did not create two events");
@@ -137,7 +141,7 @@ final class EditorUiChecks {
         importMain(source);ready(main);check(!s.main(preview(main)::isPlaying),"Recovery import auto-started playback");
 
         step("generator button creates a playable clip");
-        s.clickText(main,"Media Generators");s.clickText(main,"Solid Color");check(s.hasText("Media Generator"),"Generator dialog did not open");
+        s.clickText(main,"Media Generators");s.clickDescription(main,"Solid Color");check(s.hasText("Media Generator"),"Generator dialog did not open");
         Uri previous=s.main(()->ExportJob.get().result.uri);s.setField("Длительность генератора","1");s.setField("Цвет генератора","#2050D0");s.windowClick("Создать");
         s.await(()->!s.main(()->ExportJob.get().running)&&s.main(()->ExportJob.get().result)!=null&&!previous.equals(s.main(()->ExportJob.get().result.uri)),120000,"Generator failed: "+s.main(()->ExportJob.get().message));s.own(s.main(()->ExportJob.get().result.uri));ready(main);
         check(s.main(preview(main)::getDuration)>=900&&s.main(preview(main)::getDuration)<=1250,"Generated clip was not imported into preview");

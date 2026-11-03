@@ -80,7 +80,7 @@ public final class ProjectCodec {
             Object value=data.get(field.getName());Class<?> type=field.getType();
             if(type==String.class){if(!(value instanceof String)||((String)value).length()>4096)throw new IOException("Некорректный параметр "+field.getName());field.set(spec,value);}
             else if(type==boolean.class){if(!(value instanceof Boolean))throw new IOException("Некорректный переключатель "+field.getName());field.setBoolean(spec,(Boolean)value);}
-            else if(type==float.class){if(!(value instanceof Number)||!Double.isFinite(((Number)value).doubleValue()))throw new IOException("Некорректное число "+field.getName());field.setFloat(spec,((Number)value).floatValue());}
+            else if(type==float.class){if(!(value instanceof Number)||!Double.isFinite(((Number)value).doubleValue())||!Float.isFinite(((Number)value).floatValue()))throw new IOException("Некорректное число "+field.getName());field.setFloat(spec,((Number)value).floatValue());}
             else if(type==int.class){field.setInt(spec,integer(data,field.getName(),0,Integer.MIN_VALUE,Integer.MAX_VALUE));}
         }
         if(!spec.audioUri.isEmpty())source(spec.audioUri);if(!spec.overlayUri.isEmpty())source(spec.overlayUri);
