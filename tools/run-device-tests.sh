@@ -11,6 +11,7 @@ TEST="${VEGAS_TEST_APK:-$PROJECT/build/device-tests/VegasVideo_device_tests.apk}
 adb wait-for-device
 adb install -r "$APP"
 adb install -r -t "$TEST"
+adb logcat -G 8M > "$OUT/logcat-buffer.txt" 2>&1 || true
 adb logcat -c
 FAILURES=0
 # Preserve any caller's overrides, not merely the physical emulator defaults.

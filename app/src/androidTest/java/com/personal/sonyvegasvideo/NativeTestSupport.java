@@ -105,7 +105,13 @@ final class NativeTestSupport implements AutoCloseable {
         Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);require(selected[0].performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args),"Cannot edit field #"+index);settle();
         await(()->{AccessibilityNodeInfo actual=editable(index);return actual!=null&&value.contentEquals(actual.getText()==null?"":actual.getText());},5000,"Editable #"+index+" did not accept text "+value);
     }
-    void back(){test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);settle();}
+    void back(){
+        // DocumentsUI belongs to another UID; UiAutomation has system input-injection authority.
+        long downTime=SystemClock.uptimeMillis();
+        boolean down=test.getUiAutomation().injectInputEvent(new KeyEvent(downTime,downTime,KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_BACK,0,0,android.view.KeyCharacterMap.VIRTUAL_KEYBOARD,0,KeyEvent.FLAG_FROM_SYSTEM,android.view.InputDevice.SOURCE_KEYBOARD),true);
+        boolean up=test.getUiAutomation().injectInputEvent(new KeyEvent(downTime,SystemClock.uptimeMillis(),KeyEvent.ACTION_UP,KeyEvent.KEYCODE_BACK,0,0,android.view.KeyCharacterMap.VIRTUAL_KEYBOARD,0,KeyEvent.FLAG_FROM_SYSTEM,android.view.InputDevice.SOURCE_KEYBOARD),true);
+        require(down&&up,"System Back injection failed: down="+down+", up="+up);settle();
+    }
     android.content.ComponentName systemVideoPicker()throws Exception{
         // The test inspects system routing; app PackageManager queries are visibility-filtered.
         String command="cmd package resolve-activity --brief --user current -a android.intent.action.OPEN_DOCUMENT -c android.intent.category.OPENABLE -t video/*";

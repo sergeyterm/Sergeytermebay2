@@ -5,6 +5,7 @@ import android.content.res.AssetFileDescriptor;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.net.Uri;
+import android.os.Build;
 import androidx.media3.common.C;
 import androidx.media3.common.Effect;
 import androidx.media3.common.MediaItem;
@@ -59,17 +60,21 @@ public final class MediaPipeline {
         return compose(context,new Sequence().append(new Sequence.Clip(uri.toString(),"Video",Math.max(0,startMs),end)),settings,muted,speed,effectStartMs*1000L,effectEndMs>effectStartMs?(effectEndMs-effectStartMs)*1000L:-1);
     }
     static Composition preview(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed)throws IOException {
-        return compose(context,sequence,settings,muted,speed,0,-1);
+        return compose(context,sequence,settings,muted,speed,0,-1,true);
     }
 
     private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed)throws IOException {
         return compose(context,sequence,settings,muted,speed,0,-1);
     }
     private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed,long effectOriginUs,long effectDurationUs)throws IOException {
+        return compose(context,sequence,settings,muted,speed,effectOriginUs,effectDurationUs,false);
+    }
+    private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed,long effectOriginUs,long effectDurationUs,boolean preview)throws IOException {
         if(sequence==null||sequence.clips.isEmpty())throw new IOException("Проект пуст. Импортируйте видео.");
         EffectSpec spec=(settings==null?new EffectSpec():settings.copy()).normalize();
         if(!Float.isFinite(speed)||speed<=0)throw new IOException("Некорректная скорость предпросмотра.");
         boolean crossClips=sequence.clips.size()>1&&!spec.transition.equals("none");
+        boolean videoGapPreview=preview&&Build.VERSION.SDK_INT<=30&&crossClips;
         if(speed!=1f&&(!spec.audioUri.isEmpty()||!spec.overlayUri.isEmpty()||crossClips))throw new IOException("Со слоями и переходами между фрагментами предпросмотр доступен на скорости 1×.");
         Map<String,Source> sources=new HashMap<>();boolean sourceAudio=false;Source first=null;
         for(Sequence.Clip clip:sequence.clips){
@@ -92,7 +97,7 @@ public final class MediaPipeline {
                     Sequence.Clip clip=sequence.clips.get(i);Source input=sources.get(clip.source);
                     long startUs=timing.starts[i]*1000L,lengthUs=clip.length()*1000L;
                     long fadeInUs=i>0?timing.overlaps[i-1]*1000L:0,fadeOutUs=i<timing.overlaps.length?timing.overlaps[i]*1000L:0;
-                    if(startUs>positionUs)events.addGap(startUs-positionUs);
+                    if(startUs>positionUs){Sequence.Clip filler=sequence.clips.get(i-1);addGap(events,startUs-positionUs,videoGapPreview,filler,sources.get(filler.source),output);}
                     List<Effect> video=new ArrayList<>();video.add(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT));
                     // Front/even clips fade in/out over the fully visible moving back/odd clip.
                     // Internal effects receive project timestamps after Media3 adds the event offset.
@@ -102,7 +107,7 @@ public final class MediaPipeline {
                     events.addItem(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,Math.min(clip.outMs*1000L,input.durationUs),muted,false,audio,video,1f));
                     positionUs=timing.ends[i]*1000L;
                 }
-                if(positionUs<totalUs)events.addGap(totalUs-positionUs);
+                if(positionUs<totalUs){Sequence.Clip filler=sequence.clips.get(sequence.clips.size()-1);addGap(events,totalUs-positionUs,videoGapPreview,filler,sources.get(filler.source),output);}
                 bases.add(events.build());
             }
         }else{
@@ -150,6 +155,21 @@ public final class MediaPipeline {
                     }
                 });
         return builder.build();
+    }
+
+    private static void addGap(EditedMediaItemSequence.Builder events,long durationUs,boolean videoFiller,Sequence.Clip filler,Source input,int[] output)throws IOException {
+        if(!videoFiller){events.addGap(durationUs);return;}
+        // Keep one renderer type across API-30 preview lanes. This filler footage
+        // is invisible through activeLane's alpha=0 and contributes no source
+        // audio; export and newer previews retain native gaps.
+        List<Effect> canvas=Collections.singletonList(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT));
+        Uri uri=Uri.parse(filler.source);int chunks=0;
+        while(durationUs>0){
+            if(++chunks>4096)throw new IOException("Не удалось подготовить промежуток предпросмотра. Выберите более длинный исходник.");
+            long lengthUs=Math.min(durationUs,input.durationUs);
+            events.addItem(item(uri,input.durationUs,0,lengthUs,true,false,Collections.emptyList(),canvas,1f));
+            durationUs-=lengthUs;
+        }
     }
 
     static Composition generated(Uri image,int durationMs){

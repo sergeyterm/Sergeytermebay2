@@ -122,8 +122,9 @@ final class EditorUiChecks {
         s.screenshot("ui-full-"+size);
 
         step("render button and result open/share intents");
-        s.clickDescription(main,"Render As… — сохранить MP4");s.windowClick("Render");s.await(()->!s.main(()->ExportJob.get().running)&&s.main(()->ExportJob.get().result)!=null,120000,"UI Render did not complete: "+s.main(()->ExportJob.get().message));
-        Uri output=s.main(()->ExportJob.get().result.uri);s.own(output);s.dismissIfPresent("Закрыть");
+        final Uri[] rendered=new Uri[1];
+        s.clickDescription(main,"Render As… — сохранить MP4");s.windowClick("Render");s.await(()->s.main(()->{ExportJob job=ExportJob.get();ClipExporter.Result result=job.result;if(job.running||result==null)return false;rendered[0]=result.uri;return true;}),120000,"UI Render did not complete: "+s.main(()->ExportJob.get().message));
+        Uri output=rendered[0];s.own(output);s.dismissIfPresent("Закрыть");
         check(output.getScheme().equals("content"),"Rendered result is not shareable content");
         android.content.IntentFilter viewFilter=new android.content.IntentFilter(Intent.ACTION_VIEW);viewFilter.addDataType("video/mp4");viewFilter.addDataScheme("content");
         Instrumentation.ActivityMonitor opened=s.test.addMonitor(viewFilter,new Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null),true);
@@ -165,7 +166,8 @@ final class EditorUiChecks {
         s.clickText(main,"Media Generators");for(String item:new String[]{"Solid Color","Titles & Text","Checkerboard","Color Gradient"}){s.clickDescription(main,item);check(s.hasText("Media Generator"),"Generator configuration missing: "+item);s.windowClick("Отмена");}
         s.clickText(main,"Media Generators");s.clickDescription(main,"Solid Color");check(s.hasText("Media Generator"),"Generator dialog did not open");
         Uri previous=s.main(()->ExportJob.get().result.uri);s.setField("Длительность генератора","1");s.setField("Цвет генератора","#2050D0");s.windowClick("Создать");
-        s.await(()->!s.main(()->ExportJob.get().running)&&s.main(()->ExportJob.get().result)!=null&&!previous.equals(s.main(()->ExportJob.get().result.uri)),120000,"Generator failed: "+s.main(()->ExportJob.get().message));s.own(s.main(()->ExportJob.get().result.uri));ready(main);
+        final Uri[] generated=new Uri[1];
+        s.await(()->s.main(()->{ExportJob job=ExportJob.get();ClipExporter.Result result=job.result;if(job.running||result==null||previous.equals(result.uri))return false;generated[0]=result.uri;return true;}),120000,"Generator failed: "+s.main(()->ExportJob.get().message));s.own(generated[0]);ready(main);
         check(s.main(preview(main)::getDuration)>=900&&s.main(preview(main)::getDuration)<=1250,"Generated clip was not imported into preview");
         step("new project clears state and disables media-only actions");s.clickDescription(main,"Новый проект");
         check(!s.main(()->description(main,"Render As… — сохранить MP4").isEnabled()),"New project retains enabled Render");
