@@ -35,7 +35,7 @@ public final class EditorPreview extends FrameLayout {
     private boolean muted,ready,wantPlay,released,preparedNotified;
     private int duration,pendingPosition,effectStart,effectEnd=-1;
     private long generation;
-    private float volume=1,speed=1;
+    private float volume=1,speed=1,canvasAspect;
     private String errorMessage="";
 
     public EditorPreview(Context context){
@@ -98,7 +98,13 @@ public final class EditorPreview extends FrameLayout {
     }
     public void seekTo(long position,int ignoredMode){seekTo((int)Math.min(Integer.MAX_VALUE,Math.max(0,position)));}
     public void setVolume(float left,float right){volume=Math.max(0,Math.min(1,(left+right)/2));if(player!=null)try{player.setVolume(volume);}catch(RuntimeException ignored){}}
-    public void setResizeMode(int mode){if(mode>=0&&mode<=4)view.setResizeMode(mode);}
+    public void setResizeMode(int mode){if(mode>=0&&mode<=4){view.setResizeMode(mode);applyCanvasAspect();}}
+    private void applyCanvasAspect(){
+        // CompositionPlayer 1.8 does not report VideoSize. Supply the same rotated,
+        // normalized canvas used by export so Fit, Fill and Zoom can lay out video.
+        AspectRatioFrameLayout frame=view.findViewById(androidx.media3.ui.R.id.exo_content_frame);
+        if(frame!=null&&canvasAspect>0)frame.setAspectRatio(canvasAspect);
+    }
     public float getPlaybackSpeed(){return speed;}
     public boolean setPlaybackSpeed(float rate){
         if(!Float.isFinite(rate)||rate<.25f||rate>4f){errorMessage="Допустимая скорость предпросмотра: 0,25×–4×.";return false;}
@@ -122,20 +128,21 @@ public final class EditorPreview extends FrameLayout {
         worker.execute(()->{
             try{
                 Composition composition=selected!=null?MediaPipeline.single(application,selected,0,-1,spec,mute,rate,from,to):MediaPipeline.preview(application,project,spec,mute,rate);
-                main.post(()->{if(!released&&ticket==generation)install(composition,ticket);});
+                float aspect=MediaPipeline.previewAspectRatio(application,selected!=null?selected:Uri.parse(project.clips.get(0).source));
+                main.post(()->{if(!released&&ticket==generation)install(composition,aspect,ticket);});
             }catch(Exception error){main.post(()->fail(error,ticket));}
         });
     }
-    private void install(Composition composition,long ticket){
+    private void install(Composition composition,float aspect,long ticket){
         try{
             CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application).setLooper(Looper.getMainLooper());
             if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
-            CompositionPlayer current=builder.build();player=current;this.composition=composition;view.setPlayer(current);
+            CompositionPlayer current=builder.build();player=current;this.composition=composition;canvasAspect=aspect;view.setPlayer(current);applyCanvasAspect();
             current.addListener(new Player.Listener(){
                 @Override public void onPlaybackStateChanged(int state){
                     if(ticket!=generation||player!=current||released)return;
                     if(state==Player.STATE_READY){
-                        ready=true;getDuration();
+                        ready=true;getDuration();applyCanvasAspect();
                         if(!preparedNotified){preparedNotified=true;seekTo(pendingPosition);if(preparedListener!=null)preparedListener.accept(EditorPreview.this);}
                         if(ticket!=generation||player!=current||released)return;
                         if(wantPlay)current.play();

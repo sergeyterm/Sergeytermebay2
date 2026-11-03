@@ -33,7 +33,7 @@ final class EditorUiChecks {
         }
     }
     private void execute(String size)throws Exception{
-        Uri source=s.fixture("rotated-av.mp4"),red=s.fixture("color-red.mp4"),music=s.fixture("different-av.mp4");
+        Uri source=s.fixture("rotated-av.mp4"),red=s.fixture("color-red.mp4"),blue=s.fixture("color-blue.mp4"),music=s.fixture("different-av.mp4");
         Uri saved=s.document("roundtrip.vvp",""),sequenceSave=s.document("montage.vvp",""),invalid=s.document("bad.vvp","{broken json");
         step("project codec compatibility and malformed inputs");projectCodec(source);
         step("open native workspace and import through a document-result mock");
@@ -149,6 +149,14 @@ final class EditorUiChecks {
         s.clickDescription(sequence,"Undo");check(!saveSequence(sequenceSave).muted,"Second mute undo failed");
         s.clickDescription(sequence,"Undo");check(saveSequence(sequenceSave).sequence.length()==moved.sequence.length(),"Sequence trim history was lost on recreation");
         s.screenshot("qa-sequence-"+size);
+        step("real cross-clip preview: odd-only tail, overlap pixels and playback clock");
+        ProjectCodec.Project overlapProject=new ProjectCodec.Project();overlapProject.sequence=new Sequence().append(new Sequence.Clip(red.toString(),"red",0,1000)).append(new Sequence.Clip(blue.toString(),"blue",0,1000));overlapProject.effects.transition="dissolve";overlapProject.effects.transitionMs=400;
+        Uri overlapFile=s.document("preview-overlap.vvp",ProjectCodec.write(overlapProject));Instrumentation.ActivityMonitor overlapPicker=s.picker(Intent.ACTION_OPEN_DOCUMENT,overlapFile);s.clickText(sequence,"File");s.windowClick("Open project…");s.picked(overlapPicker);sequenceReady();
+        s.await(()->s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,10000,"Preview did not use the shortened overlap timeline");
+        seekSequence(1300);s.await(()->{double[] color=previewRgb(sequence);return color[2]>.65&&color[0]<.2;},15000,"Odd-lane preview did not show the blue clip after the first clip ended");
+        s.screenshot("qa-transition-blue-"+size);seekSequence(800);s.await(()->{double[] color=previewRgb(sequence);return color[0]>.25&&color[2]>.25&&color[1]<.2;},15000,"Paused overlap preview did not blend both source clips");
+        s.screenshot("qa-transition-blend-"+size);seekSequence(500);s.clickDescription(sequence,"Play / Pause");s.await(()->s.main(preview(sequence)::getCurrentPosition)>1100,10000,"Preview clock froze when playback entered the odd-only section");
+        s.clickDescription(sequence,"Stop");check(s.main(preview(sequence)::getDuration)>=1550&&s.main(preview(sequence)::getDuration)<=1650,"Transition playback changed project duration");
         finish(sequence);sequence=null;s.await(()->s.main(main::hasWindowFocus),10000,"Main workspace not restored");ready(main);
 
         step("invalid projects/media report errors and recover");
@@ -205,6 +213,8 @@ final class EditorUiChecks {
         finally{image.recycle();}
     }
     private long rulerHash(){return s.main(()->{TimelineView timeline=NativeTestSupport.findClass(main.getWindow().getDecorView(),TimelineView.class);NativeTestSupport.require(timeline!=null&&timeline.getWidth()>0,"Timeline not laid out");android.graphics.Bitmap bitmap=android.graphics.Bitmap.createBitmap(timeline.getWidth(),timeline.getHeight(),android.graphics.Bitmap.Config.ARGB_8888);try{timeline.draw(new android.graphics.Canvas(bitmap));float density=s.context.getResources().getDisplayMetrics().density;int left=(int)Math.max(98*density,Math.min(150*density,timeline.getWidth()*.27f))+3;long hash=0xcbf29ce484222325L;for(int y=Math.round(14*density);y<Math.min(bitmap.getHeight(),Math.round(44*density));y+=2)for(int x=left;x<bitmap.getWidth();x+=2){hash^=bitmap.getPixel(x,y);hash*=0x100000001b3L;}return hash;}finally{bitmap.recycle();}});}
+    private void seekSequence(int millis){s.main(()->{SequenceTimeline timeline=NativeTestSupport.findClass(sequence.getWindow().getDecorView(),SequenceTimeline.class);Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,millis);NativeTestSupport.require(timeline.performAccessibilityAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(),args),"Sequence timeline rejected exact seek");return null;});s.settle();}
+    private double[] previewRgb(Activity activity){android.graphics.Rect bounds=s.main(()->{android.graphics.Rect rect=new android.graphics.Rect();EditorPreview player=NativeTestSupport.findClass(activity.getWindow().getDecorView(),EditorPreview.class);player.getGlobalVisibleRect(rect);return rect;});android.graphics.Bitmap image=s.test.getUiAutomation().takeScreenshot();if(image==null||bounds.isEmpty())return new double[]{0,0,0};try{int cx=bounds.centerX(),cy=bounds.centerY(),count=0;double[] rgb=new double[3];for(int y=Math.max(0,cy-3);y<=Math.min(image.getHeight()-1,cy+3);y++)for(int x=Math.max(0,cx-3);x<=Math.min(image.getWidth()-1,cx+3);x++){int pixel=image.getPixel(x,y);rgb[0]+=android.graphics.Color.red(pixel);rgb[1]+=android.graphics.Color.green(pixel);rgb[2]+=android.graphics.Color.blue(pixel);count++;}for(int i=0;i<3;i++)rgb[i]/=Math.max(1,count)*255;return rgb;}finally{image.recycle();}}
     private void projectCodec(Uri source)throws Exception{
         ProjectCodec.Project original=new ProjectCodec.Project();original.single=true;original.sequence=new Sequence().append(new Sequence.Clip(source.toString(),"QA",137,1137));original.effects.title="Тест Ω";original.effects.brightness=.2f;original.effects.audioUri=source.toString();original.effects.overlayUri=source.toString();original.effects.transition="wipe";original.markers.add(400);original.cursor=350;
         ProjectCodec.Project restored=ProjectCodec.parse(ProjectCodec.write(original));check(restored.effects.equals(original.effects),"Common project lost effect parameters");check(restored.sequence.length()==1000&&restored.markers.size()==1,"Common project lost range/markers");

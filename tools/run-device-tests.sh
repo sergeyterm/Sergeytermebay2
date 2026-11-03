@@ -4,7 +4,7 @@ PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
 PACKAGE=com.personal.sonyvegasvideo
 RUNNER="$PACKAGE.test/$PACKAGE.ExportInstrumentation"
 OUT="$PROJECT/build/device-test-results"
-mkdir -p "$OUT/screenshots"
+mkdir -p "$OUT/screenshots" "$OUT/diagnostics"
 APP="${VEGAS_APP_APK:-$PROJECT/build/sdk/Sony_Vegas_Video_v2.4.apk}"
 TEST="${VEGAS_TEST_APK:-$PROJECT/build/device-tests/VegasVideo_device_tests.apk}"
 [[ -f "$APP" && -f "$TEST" ]] || { echo 'Build/download both APKs first.' >&2; exit 1; }
@@ -19,8 +19,11 @@ collect() {
     adb exec-out screencap -p > "$OUT/screenshots/last-screen.png" 2>/dev/null || true
     while IFS= read -r FILE; do
         FILE="${FILE%$'\r'}"
-        [[ "$FILE" =~ ^(ui|qa|effect)[A-Za-z0-9._-]*\.png$ ]] || continue
-        adb exec-out run-as "$PACKAGE" cat "files/$FILE" > "$OUT/screenshots/$FILE" 2>/dev/null || true
+        if [[ "$FILE" =~ ^(ui|qa|effect)[A-Za-z0-9._-]*\.png$ ]]; then
+            adb exec-out run-as "$PACKAGE" cat "files/$FILE" > "$OUT/screenshots/$FILE" 2>/dev/null || true
+        elif [[ "$FILE" =~ ^effect-failed-[A-Za-z0-9._-]+\.(mp4|txt)$ ]]; then
+            adb exec-out run-as "$PACKAGE" cat "files/$FILE" > "$OUT/diagnostics/$FILE" 2>/dev/null || true
+        fi
     done < <(adb shell run-as "$PACKAGE" ls files 2>/dev/null || true)
 }
 trap collect EXIT

@@ -70,7 +70,8 @@ public final class VideoEffects {
         EffectSpec source=parameters==null?new EffectSpec():parameters.copy().normalize();
         EffectSpec mask=new EffectSpec();mask.transition=source.transition;mask.transitionMs=source.transitionMs;
         long duration=Math.max(0,clipDurationUs);
-        return new FrameEffect(mask,duration,originUs,Math.max(0,Math.min(duration,fadeInUs)),Math.max(0,Math.min(duration,fadeOutUs)));
+        // Media3 DefaultVideoCompositor uses SRC_ALPHA: keep RGB straight for lane blending.
+        return new FrameEffect(mask,duration,originUs,Math.max(0,Math.min(duration,fadeInUs)),Math.max(0,Math.min(duration,fadeOutUs)),true);
     }
     private static RgbMatrix rgb(float[] matrix){return (time,hdr)->matrix.clone();}
     private static float progress(long time,long duration,long origin){return duration>0?Math.max(0,Math.min(1,(time-origin)/(float)duration)):0;}
@@ -102,15 +103,16 @@ public final class VideoEffects {
     }
 
     private static final class FrameEffect implements GlEffect {
-        private final EffectSpec spec;private final long duration,origin,fadeIn,fadeOut;
+        private final EffectSpec spec;private final long duration,origin,fadeIn,fadeOut;private final boolean alphaOnly;
         FrameEffect(EffectSpec spec,long duration,long origin){this(spec,duration,origin,-1,-1);}
-        FrameEffect(EffectSpec spec,long duration,long origin,long fadeIn,long fadeOut){this.spec=spec.copy().normalize();this.duration=duration;this.origin=origin;this.fadeIn=fadeIn;this.fadeOut=fadeOut;}
-        @Override public GlShaderProgram toGlShaderProgram(Context context,boolean hdr)throws VideoFrameProcessingException{return new FrameProgram(spec,duration,origin,fadeIn,fadeOut,hdr);}
+        FrameEffect(EffectSpec spec,long duration,long origin,long fadeIn,long fadeOut){this(spec,duration,origin,fadeIn,fadeOut,false);}
+        FrameEffect(EffectSpec spec,long duration,long origin,long fadeIn,long fadeOut,boolean alphaOnly){this.spec=spec.copy().normalize();this.duration=duration;this.origin=origin;this.fadeIn=fadeIn;this.fadeOut=fadeOut;this.alphaOnly=alphaOnly;}
+        @Override public GlShaderProgram toGlShaderProgram(Context context,boolean hdr)throws VideoFrameProcessingException{return new FrameProgram(spec,duration,origin,fadeIn,fadeOut,alphaOnly,hdr);}
     }
     private static final class FrameProgram extends BaseGlShaderProgram {
-        private final GlProgram program;private final EffectSpec spec;private final long duration,origin,fadeIn,fadeOut;private int width,height;
-        FrameProgram(EffectSpec spec,long duration,long origin,long fadeIn,long fadeOut,boolean hdr)throws VideoFrameProcessingException{
-            super(hdr,1);this.spec=spec;this.duration=duration;this.origin=origin;this.fadeIn=fadeIn;this.fadeOut=fadeOut;
+        private final GlProgram program;private final EffectSpec spec;private final long duration,origin,fadeIn,fadeOut;private final boolean alphaOnly;private int width,height;
+        FrameProgram(EffectSpec spec,long duration,long origin,long fadeIn,long fadeOut,boolean alphaOnly,boolean hdr)throws VideoFrameProcessingException{
+            super(hdr,1);this.spec=spec;this.duration=duration;this.origin=origin;this.fadeIn=fadeIn;this.fadeOut=fadeOut;this.alphaOnly=alphaOnly;
             try{
                 program=new GlProgram(VERTEX,FRAGMENT);program.setBufferAttribute("aFramePosition",GlUtil.getNormalizedCoordinateBounds(),4);
             }catch(GlUtil.GlException error){throw new VideoFrameProcessingException(error);}
@@ -123,6 +125,7 @@ public final class VideoEffects {
                 program.setFloatsUniform("uKey",new float[]{linear(Color.red(spec.chromaColor)),linear(Color.green(spec.chromaColor)),linear(Color.blue(spec.chromaColor))});
                 program.setFloatUniform("uThreshold",spec.chromaThreshold);
                 program.setFloatUniform("uOpacity",spec.videoOpacity);
+                program.setIntUniform("uAlphaOnly",alphaOnly?1:0);
                 int kind=spec.transition.equals("dissolve")?1:spec.transition.equals("cross")?2:spec.transition.equals("wipe")?3:spec.transition.equals("cascade")?4:0;
                 program.setIntUniform("uTransition",kind);
                 float edge=1;if(kind!=0&&duration>0){
@@ -139,10 +142,10 @@ public final class VideoEffects {
     }
     private static final String VERTEX="attribute vec4 aFramePosition;\nvarying vec2 vTexCoord;\nvoid main(){gl_Position=aFramePosition;vTexCoord=aFramePosition.xy*0.5+0.5;}\n";
     private static final String FRAGMENT="precision mediump float;\n"
-            +"uniform sampler2D uTexSampler;uniform vec2 uPixelStep;uniform float uMosaic;uniform int uChroma;uniform vec3 uKey;uniform float uThreshold;uniform float uOpacity;uniform int uTransition;uniform float uProgress;varying vec2 vTexCoord;\n"
+            +"uniform sampler2D uTexSampler;uniform vec2 uPixelStep;uniform float uMosaic;uniform int uChroma;uniform vec3 uKey;uniform float uThreshold;uniform float uOpacity;uniform int uAlphaOnly;uniform int uTransition;uniform float uProgress;varying vec2 vTexCoord;\n"
             +"void main(){vec2 uv=vTexCoord;float alpha=1.0;float q=clamp(uProgress,0.0,1.0);"
             +"if(uTransition==1){alpha=q;}else if(uTransition==2){float cross=min(abs(uv.x-0.5),abs(uv.y-0.5));alpha=step(cross,q*0.501);}else if(uTransition==3){alpha=step(uv.x,q);}else if(uTransition==4){float band=floor(uv.y*6.0);float p=clamp(q*1.5-band*0.1,0.0,1.0);float angle=(1.0-p)*1.35;uv.x=(uv.x-0.5)/max(0.04,cos(angle))+0.5+(1.0-p)*0.6;alpha=p;}"
             +"if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){gl_FragColor=vec4(0.0);return;}"
             +"if(uMosaic>0.5){vec2 block=max(uPixelStep*uMosaic,uPixelStep);uv=(floor(uv/block)+0.5)*block;}"
-            +"vec4 color=texture2D(uTexSampler,clamp(uv,vec2(0.0),vec2(1.0)));if(uChroma==1){float keyAlpha=smoothstep(uThreshold*0.6,uThreshold,distance(color.rgb,uKey));color*=keyAlpha;}gl_FragColor=color*alpha*uOpacity;}\n";
+            +"vec4 color=texture2D(uTexSampler,clamp(uv,vec2(0.0),vec2(1.0)));if(uChroma==1){float keyAlpha=smoothstep(uThreshold*0.6,uThreshold,distance(color.rgb,uKey));if(uAlphaOnly==1){color.a*=keyAlpha;}else{color*=keyAlpha;}}gl_FragColor=uAlphaOnly==1?vec4(color.rgb,color.a*alpha*uOpacity):color*alpha*uOpacity;}\n";
 }

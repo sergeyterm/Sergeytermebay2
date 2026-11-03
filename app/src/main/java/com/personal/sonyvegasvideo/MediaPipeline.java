@@ -33,11 +33,16 @@ import java.util.Map;
 /** Shared composition graph for preview and MP4 output. Call metadata methods off the UI thread. */
 public final class MediaPipeline {
     private MediaPipeline() { }
+    private static Uri previewGapImage;
     private static final class Source {long durationUs;boolean video,audio;int width,height;}
 
     public static int durationMs(Context context,Uri uri)throws IOException {
         Source source=inspect(context,uri,true,false);
         return (int)Math.min(Integer.MAX_VALUE,Math.max(1,source.durationUs/1000));
+    }
+    static float previewAspectRatio(Context context,Uri uri)throws IOException {
+        Source source=inspect(context,uri,true,false);int[] size=outputSize(source.width,source.height);
+        return (float)size[0]/size[1];
     }
     public static Composition composition(Context context,Sequence sequence,EffectSpec settings,boolean muted)throws IOException {
         return compose(context,sequence,settings,muted,1f);
@@ -54,13 +59,16 @@ public final class MediaPipeline {
         return compose(context,new Sequence().append(new Sequence.Clip(uri.toString(),"Video",Math.max(0,startMs),end)),settings,muted,speed,effectStartMs*1000L,effectEndMs>effectStartMs?(effectEndMs-effectStartMs)*1000L:-1);
     }
     static Composition preview(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed)throws IOException {
-        return compose(context,sequence,settings,muted,speed);
+        return compose(context,sequence,settings,muted,speed,0,-1,true);
     }
 
     private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed)throws IOException {
         return compose(context,sequence,settings,muted,speed,0,-1);
     }
     private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed,long effectOriginUs,long effectDurationUs)throws IOException {
+        return compose(context,sequence,settings,muted,speed,effectOriginUs,effectDurationUs,false);
+    }
+    private static Composition compose(Context context,Sequence sequence,EffectSpec settings,boolean muted,float speed,long effectOriginUs,long effectDurationUs,boolean preview)throws IOException {
         if(sequence==null||sequence.clips.isEmpty())throw new IOException("Проект пуст. Импортируйте видео.");
         EffectSpec spec=(settings==null?new EffectSpec():settings.copy()).normalize();
         if(!Float.isFinite(speed)||speed<=0)throw new IOException("Некорректная скорость предпросмотра.");
@@ -87,7 +95,7 @@ public final class MediaPipeline {
                     Sequence.Clip clip=sequence.clips.get(i);Source input=sources.get(clip.source);
                     long startUs=timing.starts[i]*1000L,lengthUs=clip.length()*1000L;
                     long fadeInUs=i>0?timing.overlaps[i-1]*1000L:0,fadeOutUs=i<timing.overlaps.length?timing.overlaps[i]*1000L:0;
-                    if(startUs>positionUs)events.addGap(startUs-positionUs);
+                    if(startUs>positionUs)addGap(context,events,startUs-positionUs,preview);
                     List<Effect> video=new ArrayList<>();video.add(Presentation.createForWidthAndHeight(output[0],output[1],Presentation.LAYOUT_SCALE_TO_FIT));
                     // Front/even clips fade in/out over the fully visible moving back/odd clip.
                     // Internal effects receive project timestamps after Media3 adds the event offset.
@@ -97,7 +105,7 @@ public final class MediaPipeline {
                     events.addItem(item(Uri.parse(clip.source),input.durationUs,clip.inMs*1000L,Math.min(clip.outMs*1000L,input.durationUs),muted,false,audio,video,1f));
                     positionUs=timing.ends[i]*1000L;
                 }
-                if(positionUs<totalUs)events.addGap(totalUs-positionUs);
+                if(positionUs<totalUs)addGap(context,events,totalUs-positionUs,preview);
                 bases.add(events.experimentalSetForceVideoTrack(true).experimentalSetForceAudioTrack(forceAudio).build());
             }
         }else{
@@ -145,6 +153,19 @@ public final class MediaPipeline {
                     }
                 });
         return builder.build();
+    }
+
+    private static void addGap(Context context,EditedMediaItemSequence.Builder sequence,long durationUs,boolean preview)throws IOException {
+        if(!preview){sequence.addGap(durationUs);return;}
+        // CompositionPlayer 1.8 turns addGap into audio silence only. An invisible
+        // image stream also supplies the video clock needed by the compositor.
+        Uri image;
+        synchronized(MediaPipeline.class){
+            if(previewGapImage==null)previewGapImage=GeneratedMedia.create(context,"solid","",android.graphics.Color.BLACK,64,64);
+            image=previewGapImage;
+        }
+        MediaItem item=new MediaItem.Builder().setUri(image).setMimeType("image/png").setImageDurationMs(Math.max(1,(durationUs+999)/1000)).build();
+        sequence.addItem(new EditedMediaItem.Builder(item).setDurationUs(durationUs).setFrameRate(30).build());
     }
 
     static Composition generated(Uri image,int durationMs){

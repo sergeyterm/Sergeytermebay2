@@ -1,7 +1,13 @@
 package com.personal.sonyvegasvideo;
 
 import android.content.ContentValues;
+import android.content.ContentUris;
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.database.Cursor;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,6 +25,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -130,18 +137,74 @@ public final class ExportJob {
     private void stopPolling(){if(progressPoll!=null)main.removeCallbacks(progressPoll);progressPoll=null;}
     private ClipExporter.Result publish(Context context,File file,long durationUs,AtomicBoolean token)throws Exception {
         checkCancelled(token);if(!file.isFile()||file.length()<32)throw new IOException("Кодировщик не создал видео. Попробуйте другой источник.");
+        // A completion callback is not enough: reject a malformed/empty MP4 before
+        // creating a public item, then verify the URI after MediaStore publishes it.
+        validateMovie(context,Uri.fromFile(file),file.length());checkCancelled(token);
+        Uri collection=MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        String name="VegasVideo_"+System.currentTimeMillis()+"_"+UUID.randomUUID().toString().substring(0,8)+".mp4";
+        String relative="Movies/Sony Vegas Video/";
         Uri uri=null;boolean complete=false;
         try{
-            ContentValues values=new ContentValues();values.put(MediaStore.Video.Media.DISPLAY_NAME,"VegasVideo_"+System.currentTimeMillis()+".mp4");values.put(MediaStore.Video.Media.MIME_TYPE,"video/mp4");values.put(MediaStore.Video.Media.RELATIVE_PATH,"Movies/Sony Vegas Video");values.put(MediaStore.Video.Media.IS_PENDING,1);
-            uri=context.getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,values);if(uri==null)throw new IOException("Не удалось создать видео в Галерее.");
+            ContentValues values=new ContentValues();values.put(MediaStore.Video.Media.DISPLAY_NAME,name);values.put(MediaStore.Video.Media.MIME_TYPE,"video/mp4");values.put(MediaStore.Video.Media.RELATIVE_PATH,relative);values.put(MediaStore.Video.Media.IS_PENDING,1);
+            uri=context.getContentResolver().insert(collection,values);if(uri==null)throw new IOException("Не удалось создать видео в Галерее.");
             try(FileInputStream input=new FileInputStream(file);OutputStream output=context.getContentResolver().openOutputStream(uri,"w")){
                 if(output==null)throw new IOException("Не удалось открыть выходной файл.");byte[] buffer=new byte[256*1024];int size;
                 while((size=input.read(buffer))!=-1){checkCancelled(token);output.write(buffer,0,size);}output.flush();
             }
             checkCancelled(token);ContentValues ready=new ContentValues();ready.put(MediaStore.Video.Media.IS_PENDING,0);
             if(context.getContentResolver().update(uri,ready,null,null)!=1)throw new IOException("Не удалось опубликовать видео.");
+            uri=awaitPublishedMovie(context,collection,uri,name,relative,file.length(),token);
             checkCancelled(token);complete=true;return new ClipExporter.Result(uri,0,durationUs);
-        }finally{if(!complete&&uri!=null)context.getContentResolver().delete(uri,null,null);}
+        }finally{if(!complete){safeDelete(context,uri);deleteNamedPublication(context,collection,name,relative);}}
+    }
+    private static Uri awaitPublishedMovie(Context context,Uri collection,Uri initial,String name,String relative,long bytes,AtomicBoolean token)throws Exception {
+        Uri candidate=initial;int stable=0;IOException last=null;
+        for(int attempt=0;attempt<12;attempt++){
+            checkCancelled(token);
+            try{
+                validateMovie(context,candidate,bytes);
+                // Media scanners may still reconcile the pending-file rename. Two
+                // successful reads apart keep us from exposing a transient old row.
+                if(++stable>=2)return candidate;
+            }catch(IOException unavailable){
+                last=unavailable;stable=0;
+                Uri fresh=findNamedPublication(context,collection,name,relative);
+                if(fresh!=null)candidate=fresh;
+            }
+            try{Thread.sleep(100);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new CancellationException();}
+        }
+        checkCancelled(token);throw new IOException("Галерея ещё не предоставила доступ к готовому видео. Повторите сохранение.",last);
+    }
+    private static Uri findNamedPublication(Context context,Uri collection,String name,String relative){
+        try(Cursor cursor=context.getContentResolver().query(collection,new String[]{MediaStore.Video.Media._ID},
+                MediaStore.Video.Media.DISPLAY_NAME+" = ? AND "+MediaStore.Video.Media.RELATIVE_PATH+" = ?",new String[]{name,relative},MediaStore.Video.Media._ID+" DESC")){
+            return cursor!=null&&cursor.moveToFirst()?ContentUris.withAppendedId(collection,cursor.getLong(0)):null;
+        }catch(RuntimeException unavailable){return null;}
+    }
+    private static void deleteNamedPublication(Context context,Uri collection,String name,String relative){
+        // The randomized name belongs to this job, so cleanup never selects a user's source.
+        try{context.getContentResolver().delete(collection,MediaStore.Video.Media.DISPLAY_NAME+" = ? AND "+MediaStore.Video.Media.RELATIVE_PATH+" = ?",new String[]{name,relative});}
+        catch(RuntimeException ignored){}
+    }
+    private static void safeDelete(Context context,Uri uri){if(uri!=null)try{context.getContentResolver().delete(uri,null,null);}catch(RuntimeException ignored){}}
+    private static void validateMovie(Context context,Uri uri,long expectedBytes)throws IOException {
+        MediaExtractor extractor=new MediaExtractor();MediaMetadataRetriever reader=new MediaMetadataRetriever();
+        try(AssetFileDescriptor descriptor=context.getContentResolver().openAssetFileDescriptor(uri,"r")){
+            if(descriptor==null||descriptor.getParcelFileDescriptor().getStatSize()<expectedBytes)throw new IOException("Готовое видео ещё недоступно для чтения.");
+            long length=descriptor.getDeclaredLength();
+            if(length>=0){extractor.setDataSource(descriptor.getFileDescriptor(),descriptor.getStartOffset(),length);reader.setDataSource(descriptor.getFileDescriptor(),descriptor.getStartOffset(),length);}
+            else{extractor.setDataSource(descriptor.getFileDescriptor());reader.setDataSource(descriptor.getFileDescriptor());}
+            int video=-1;
+            for(int i=0;i<extractor.getTrackCount();i++){
+                MediaFormat format=extractor.getTrackFormat(i);String mime=format.getString(MediaFormat.KEY_MIME);
+                if(mime!=null&&mime.startsWith("video/")){video=i;break;}
+            }
+            if(video<0)throw new IOException("Кодировщик не создал видеодорожку.");
+            extractor.selectTrack(video);if(extractor.getSampleTime()<0||extractor.getSampleSize()<=0)throw new IOException("Кодировщик не создал видеокадры.");
+            String duration=reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+            if(duration==null||Long.parseLong(duration)<=0)throw new IOException("Некорректная длительность готового MP4.");
+        }catch(RuntimeException unavailable){throw new IOException("Не удалось проверить готовое видео.",unavailable);}
+        finally{extractor.release();try{reader.release();}catch(Exception ignored){}}
     }
     private void finish(long ticket,ClipExporter.Result output,String failure){
         main.post(()->{
@@ -155,7 +218,8 @@ public final class ExportJob {
                 return;
             }
             stopPolling();running=false;result=output;percent=output==null?percent:100;
-            message=failure!=null?failure:output==null?"Экспорт не завершён.":"Готово! Галерея → Фильмы → Sony Vegas Video\nДлительность: "+ClipMath.clockCode(output.endUs/1000);
+            String finalFailure=cancelled.get()?cancelMessage():failure;
+            message=finalFailure!=null?finalFailure:output==null?"Экспорт не завершён.":"Готово! Галерея → Фильмы → Sony Vegas Video\nДлительность: "+ClipMath.clockCode(output.endUs/1000);
             notifyChanged();
         });
     }

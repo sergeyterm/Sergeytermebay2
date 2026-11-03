@@ -22,13 +22,15 @@ final class EditedExportChecks {
     private final ExportJob job=ExportJob.get();
     private String phase="initialization";
     private int checks;
+    private java.io.File diagnosticCandidate;
+    private String diagnosticUri="",diagnosticPhase="",diagnosticReadError="";
     private EditedExportChecks(NativeTestSupport s){this.s=s;}
     static String run(Instrumentation test)throws Exception{
         try(NativeTestSupport support=new NativeTestSupport(test)){
             EditedExportChecks suite=new EditedExportChecks(support);
             try{suite.execute();return "edited export: "+suite.checks+" content checks; real Media3 effects, four transitions, title, animation, generators, PIP, audio gain/music, mixed sources, exact trim, cancellation/retry";}
-            catch(Throwable failure){throw new AssertionError("Edited export phase: "+suite.phase,failure);}
-            finally{support.main(()->{suite.job.cancel();return null;});support.await(()->!support.main(()->suite.job.running),15000,"Export did not stop after test");}
+            catch(Throwable failure){try{suite.retainFailure(failure);}catch(Exception diagnosticFailure){support.step("Could not retain failed MP4 diagnostic: "+diagnosticFailure);}throw new AssertionError("Edited export phase: "+suite.phase,failure);}
+            finally{suite.clearCandidate();support.main(()->{suite.job.cancel();return null;});support.await(()->!support.main(()->suite.job.running),15000,"Export did not stop after test");}
         }
     }
     private void execute()throws Exception{
@@ -63,6 +65,7 @@ final class EditedExportChecks {
         for(String transition:new String[]{"dissolve","cross","wipe","cascade"}){
             step("transition "+transition+" changes first/last frames");EffectSpec effect=new EffectSpec();effect.transition=transition;effect.transitionMs=300;
             Uri out=render(one(red,0,1200),effect,true);Bitmap first=frame(out,0),middle=frame(out,600_000),last=frame(out,1_160_000);
+            saveFrame(first,"effect-entry-"+transition+"-early.png");saveFrame(middle,"effect-entry-"+transition+"-mid.png");saveFrame(last,"effect-entry-"+transition+"-late.png");
             double mid=mean(middle,0);check(mid>.6,"Transition obscures middle of clip: "+transition);
             check(mean(first,0)<mid*.8,"Transition has no entry animation: "+transition);
             check(mean(last,0)<mid*.85,"Transition has no exit animation: "+transition);first.recycle();middle.recycle();last.recycle();
@@ -73,21 +76,23 @@ final class EditedExportChecks {
             EffectSpec effect=new EffectSpec();effect.transition=transition;effect.transitionMs=400;Uri out=render(redBlue,effect,true);
             check(duration(out)>=1530&&duration(out)<=1700,"Cross-clip overlap did not shorten the timeline: "+transition+" "+duration(out));
             Bitmap earlyClip=frame(out,300_000),overlap=frame(out,800_000),lateClip=frame(out,1_300_000);
+            saveFrame(earlyClip,"effect-between-"+transition+"-early.png");saveFrame(overlap,"effect-between-"+transition+".png");saveFrame(lateClip,"effect-between-"+transition+"-late.png");
             double[] earlyRgb=rgb(earlyClip,.5,.5),lateRgb=rgb(lateClip,.5,.5);
-            check(earlyRgb[0]>.7&&earlyRgb[2]<.2,"Cross-clip transition damaged the outgoing clip before overlap: "+transition);
-            check(lateRgb[2]>.7&&lateRgb[0]<.2,"Cross-clip transition failed to reveal incoming clip: "+transition);
-            if(transition.equals("dissolve")){double[] middleRgb=rgb(overlap,.5,.5);check(middleRgb[0]>.25&&middleRgb[2]>.25&&middleRgb[1]<.2,"Dissolve did not blend the two source images");}
-            else {check(colorFraction(overlap,true)>.03&&colorFraction(overlap,false)>.03,"Cross-clip "+transition+" did not show both source colors during overlap");}
-            check(blackFraction(overlap)<.08,"Cross-clip "+transition+" faded through black instead of the other clip");
-            saveFrame(overlap,"effect-between-"+transition+".png");earlyClip.recycle();overlap.recycle();lateClip.recycle();
+            check(earlyRgb[0]>.7&&earlyRgb[2]<.2,"Cross-clip transition damaged the outgoing clip before overlap: "+transition+" RGB="+java.util.Arrays.toString(earlyRgb));
+            check(lateRgb[2]>.7&&lateRgb[0]<.2,"Cross-clip transition failed to reveal incoming clip: "+transition+" RGB="+java.util.Arrays.toString(lateRgb));
+            if(transition.equals("dissolve")){double[] middleRgb=rgb(overlap,.5,.5);check(middleRgb[0]>.25&&middleRgb[2]>.25&&middleRgb[1]<.2,"Dissolve did not blend the two source images: RGB="+java.util.Arrays.toString(middleRgb));}
+            else {double redFraction=colorFraction(overlap,true),blueFraction=colorFraction(overlap,false);check(redFraction>.03&&blueFraction>.03,"Cross-clip "+transition+" did not show both source colors during overlap: red="+redFraction+", blue="+blueFraction+", centerRGB="+java.util.Arrays.toString(rgb(overlap,.5,.5)));}
+            double black=blackFraction(overlap);check(black<.08,"Cross-clip "+transition+" faded through black instead of the other clip: black="+black);
+            earlyClip.recycle();overlap.recycle();lateClip.recycle();
         }
         step("third clip transition uses its nonzero project origin");
         EffectSpec thirdTransition=new EffectSpec();thirdTransition.transition="dissolve";thirdTransition.transitionMs=400;
         Uri three=render(redBlue.append(new Sequence.Clip(red.toString(),"red again",0,1000)),thirdTransition,true);
         check(duration(three)>=2130&&duration(three)<=2300,"Three-clip overlaps did not shorten both boundaries");
         Bitmap secondBlend=frame(three,1_400_000),thirdEnd=frame(three,1_950_000);double[] secondRgb=rgb(secondBlend,.5,.5),thirdRgb=rgb(thirdEnd,.5,.5);
-        check(secondRgb[0]>.25&&secondRgb[2]>.25&&secondRgb[1]<.2,"Second transition ignored its nonzero timeline origin");
-        check(thirdRgb[0]>.7&&thirdRgb[2]<.2,"Third clip was not fully revealed after its transition");saveFrame(secondBlend,"effect-between-third.png");secondBlend.recycle();thirdEnd.recycle();
+        saveFrame(secondBlend,"effect-between-third.png");saveFrame(thirdEnd,"effect-between-third-late.png");
+        check(secondRgb[0]>.25&&secondRgb[2]>.25&&secondRgb[1]<.2,"Second transition ignored its nonzero timeline origin: RGB="+java.util.Arrays.toString(secondRgb));
+        check(thirdRgb[0]>.7&&thirdRgb[2]<.2,"Third clip was not fully revealed after its transition: RGB="+java.util.Arrays.toString(thirdRgb));secondBlend.recycle();thirdEnd.recycle();
         step("audio crossfade ramps both source tones through the overlap");
         EffectSpec audioTransition=new EffectSpec();audioTransition.transition="dissolve";audioTransition.transitionMs=400;
         Uri faded=render(one(source,0,1000).append(new Sequence.Clip(different.toString(),"880 Hz",0,1000)),audioTransition,false);
@@ -156,8 +161,28 @@ final class EditedExportChecks {
     private Uri render(Sequence clips,EffectSpec effects,boolean muted){s.main(()->{NativeTestSupport.require(!job.running,"Previous export still running");job.startEdited(s.context,clips,effects,muted);return null;});return finishJob();}
     private Uri finishJob(){
         s.await(()->!s.main(()->job.running),120000,"Export timed out: "+phase+"; "+s.main(()->job.message));
-        ClipExporter.Result result=s.main(()->job.result);check(result!=null,"Export failed: "+s.main(()->job.message));s.own(result.uri);return result.uri;
+        ClipExporter.Result result=s.main(()->job.result);check(result!=null,"Export failed: "+s.main(()->job.message));s.own(result.uri);stageDiagnostic(result.uri);return result.uri;
     }
+    /** Copy before metadata/decoder access; keep the bytes only if a subsequent assertion fails. */
+    private void stageDiagnostic(Uri uri){
+        clearCandidate();diagnosticUri=uri.toString();diagnosticPhase=phase;diagnosticReadError="";
+        diagnosticCandidate=new java.io.File(s.context.getFilesDir(),"render-diagnostic-candidate.tmp");
+        try(InputStream in=s.context.getContentResolver().openInputStream(uri);java.io.FileOutputStream out=new java.io.FileOutputStream(diagnosticCandidate)){
+            if(in==null)throw new java.io.IOException("ContentResolver returned no stream");byte[] buffer=new byte[8192];int n;long bytes=0;
+            while((n=in.read(buffer))!=-1){bytes+=n;if(bytes>32L*1024*1024)throw new java.io.IOException("Diagnostic exceeded 32 MiB limit");out.write(buffer,0,n);}
+        }catch(Exception error){diagnosticReadError=error.toString();}
+    }
+    private void retainFailure(Throwable error)throws Exception{
+        String name="effect-failed-"+SystemClock.uptimeMillis();java.io.File video=new java.io.File(s.context.getFilesDir(),name+".mp4");
+        long bytes=diagnosticCandidate!=null&&diagnosticCandidate.isFile()?diagnosticCandidate.length():-1;
+        if(diagnosticCandidate!=null&&diagnosticCandidate.isFile()){
+            if(!diagnosticCandidate.renameTo(video))java.nio.file.Files.copy(diagnosticCandidate.toPath(),video.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+        String details="Failure phase: "+phase+"\nLast exported candidate phase: "+diagnosticPhase+"\nURI: "+diagnosticUri+"\nCopied bytes: "+bytes+"\nCopy error: "+diagnosticReadError+"\n\n"+android.util.Log.getStackTraceString(error);
+        try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(s.context.getFilesDir(),name+".txt"))){out.write(details.getBytes(java.nio.charset.StandardCharsets.UTF_8));}
+        s.step("Retained failed export diagnostic: "+name+" ("+bytes+" bytes)");
+    }
+    private void clearCandidate(){if(diagnosticCandidate!=null){diagnosticCandidate.delete();diagnosticCandidate=null;}}
     private long duration(Uri uri)throws Exception{MediaMetadataRetriever reader=new MediaMetadataRetriever();try{reader.setDataSource(s.context,uri);return Long.parseLong(reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));}finally{reader.release();}}
     private Bitmap frame(Uri uri,long at)throws Exception{MediaMetadataRetriever reader=new MediaMetadataRetriever();try{reader.setDataSource(s.context,uri);Bitmap frame=reader.getScaledFrameAtTime(at,MediaMetadataRetriever.OPTION_CLOSEST,200,200);check(frame!=null,"Cannot decode edited video at "+at);return frame;}finally{reader.release();}}
     private void saveFrame(Bitmap bitmap,String name)throws Exception{try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(s.context.getFilesDir(),name))){bitmap.compress(Bitmap.CompressFormat.PNG,100,out);}}
