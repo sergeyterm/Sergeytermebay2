@@ -2,15 +2,16 @@ package com.personal.sonyvegasvideo;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
-import android.media.MediaMetadataRetriever;
 import android.media.MediaMuxer;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 import java.io.IOException;
+import java.io.FileInputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -78,15 +79,9 @@ public final class SequenceExporter {
             if(p.video==null)throw new IOException("Нет видео: "+clip.name);
             p.rotation=p.video.containsKey(MediaFormat.KEY_ROTATION)?p.video.getInteger(MediaFormat.KEY_ROTATION):0;
             long sourceDuration=p.video.containsKey(MediaFormat.KEY_DURATION)?p.video.getLong(MediaFormat.KEY_DURATION):clip.outMs*1000L;
-            // Track duration can include encoder priming/edit-list padding. Use the
-            // movie's presentation duration so EOF cuts do not add a padded frame.
-            MediaMetadataRetriever metadata=new MediaMetadataRetriever();
-            try{
-                metadata.setDataSource(context,Uri.parse(clip.source));
-                String millis=metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-                if(millis!=null){long presentationMs=Long.parseLong(millis);if(presentationMs>0&&presentationMs<=Long.MAX_VALUE/1000)sourceDuration=Math.min(sourceDuration,presentationMs*1000);}
-            }catch(RuntimeException unavailable){/* Keep the extractor duration if movie metadata is unavailable. */}
-            finally{metadata.release();}
+            // Android track metadata can include padding excluded by the MP4 movie timeline.
+            long movieDuration=movieDuration(context,Uri.parse(clip.source));
+            if(movieDuration>0)sourceDuration=Math.min(sourceDuration,movieDuration);
             if(sourceDuration<=0||clip.inMs*1000L>=sourceDuration||clip.outMs*1000L>sourceDuration+500_000L)throw new IOException("Границы выходят за длительность исходника: "+clip.name);
             long requestedEnd=Math.min(clip.outMs*1000L,sourceDuration);
             e.selectTrack(p.videoTrack);e.seekTo(clip.inMs*1000L,MediaExtractor.SEEK_TO_CLOSEST_SYNC);
@@ -100,6 +95,14 @@ public final class SequenceExporter {
             p.out=next>=requestedEnd-1000?Math.min(next,sourceDuration):sourceDuration;
             if(p.out<=p.in)throw new IOException("Пустой фрагмент: "+clip.name);return p;
         }finally{e.release();}
+    }
+    private static long movieDuration(Context context,Uri source){
+        try(AssetFileDescriptor asset=context.getContentResolver().openAssetFileDescriptor(source,"r")){
+            if(asset==null)return -1;
+            try(FileInputStream stream=asset.createInputStream()){
+                return Mp4Duration.read(stream.getChannel(),asset.getStartOffset(),asset.getDeclaredLength());
+            }
+        }catch(IOException|RuntimeException unavailable){return -1;}
     }
     private static void compatible(Part a,Part b,boolean mute)throws IOException{
         if(a.rotation!=b.rotation||!same(a.video,b.video,new String[]{MediaFormat.KEY_MIME,MediaFormat.KEY_WIDTH,MediaFormat.KEY_HEIGHT,"csd-0","csd-1","csd-2","color-standard","color-range","color-transfer","hdr-static-info"}))
