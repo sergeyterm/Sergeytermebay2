@@ -128,8 +128,16 @@ public final class MainActivity extends Activity {
         setContentView(root);
         windowTitle=text("Untitled — Sony Vegas Video",12,TEXT);windowTitle.setPadding(dp(8),0,0,0);windowTitle.setBackgroundColor(0xffc9c9c9);root.addView(windowTitle,lp(-1,25));
         HorizontalScrollView menuScroll=horizontalScroll();LinearLayout menuRow=row(CHROME);
-        String[] menus={"File","Edit","View","Insert","Эффекты","Tools","Options","Help"};
-        for(String name:menus){TextView item=text(name,12,TEXT);item.setPadding(dp(9),0,dp(9),0);menuRow.addView(item,lp(-2,29));item.setOnClickListener(v->showMenu(item,name));}
+        String[][] menus = {{"File", "open"}, {"Edit", "cut"}, {"View", "view"}, {"Insert", "plus"},
+                {"Эффекты", "effects"}, {"Tools", "settings"}, {"Options", "sliders"}, {"Help", "help"}};
+        for (String[] entry : menus) {
+            String name = entry[0];
+            TextView item = text(name, 12, TEXT);
+            item.setPadding(dp(6), 0, dp(6), 0);
+            ClassicIcon.decorate(item, entry[1], 14);
+            menuRow.addView(item, lp(-2, 29));
+            item.setOnClickListener(v -> showMenu(item, name));
+        }
         menuScroll.addView(menuRow);root.addView(menuScroll,lp(-1,29));
         LinearLayout toolbar=row(0xffa7a7a7);HorizontalScrollView toolbarScroll=horizontalScroll();toolbarScroll.addView(toolbar);root.addView(toolbarScroll,lp(-1,36));
         tool(toolbar,"new","Новый проект",this::newProject,false);
@@ -156,15 +164,24 @@ public final class MainActivity extends Activity {
         sourceLabel=text("Project Media",10,TEXT);sourceLabel.setSingleLine();sourceLabel.setEllipsize(TextUtils.TruncateAt.END);libraryTools.addView(sourceLabel,new LinearLayout.LayoutParams(0,-1,1));
         libraryContent=new FrameLayout(this);libraryPane.addView(libraryContent,new LinearLayout.LayoutParams(-1,0,1));
         HorizontalScrollView tabsScroll=horizontalScroll();LinearLayout tabs=row(PANEL);tabsScroll.addView(tabs);libraryPane.addView(tabsScroll,lp(-1,30));
-        String[] tabNames={"Project Media","Explorer","Transitions","Video FX","Media Generators"};
-        for(int i=0;i<tabNames.length;i++){final int index=i;TextView tab=text(tabNames[i],10,TEXT);tab.setPadding(dp(9),0,dp(9),0);tabs.addView(tab,lp(-2,29));tabLabels.add(tab);tab.setOnClickListener(v->{selectedTab=index;renderLibrary();});}
+        String[][] tabsWithIcons = {{"Project Media", "video"}, {"Explorer", "open"},
+                {"Transitions", "transition"}, {"Video FX", "effects"}, {"Media Generators", "gradient"}};
+        for (int i = 0; i < tabsWithIcons.length; i++) {
+            final int index = i;
+            TextView tab = text(tabsWithIcons[i][0], 10, TEXT);
+            tab.setPadding(dp(6), 0, dp(6), 0);
+            ClassicIcon.decorate(tab, tabsWithIcons[i][1], 13);
+            tabs.addView(tab, lp(-2, 29));
+            tabLabels.add(tab);
+            tab.setOnClickListener(v -> { selectedTab = index; renderLibrary(); });
+        }
         libraryPane.setVisibility(libraryVisible?View.VISIBLE:View.GONE);
         View divider=new View(this);divider.setBackgroundColor(0xff626262);docking.addView(divider,lp(3,-1));
         LinearLayout previewPane=column(PANEL);previewPane.setBackground(border(PANEL));docking.addView(previewPane,new LinearLayout.LayoutParams(0,-1,wide?.58f:.66f));
         LinearLayout previewTools=row(PANEL);previewPane.addView(previewTools,lp(-1,30));
         tool(previewTools,"settings","Свойства медиа",this::properties,true,28);
         TextView previewTitle=text("Video Preview",11,TEXT);previewTools.addView(previewTitle,new LinearLayout.LayoutParams(0,-1,1));
-        TextView quality=text("Fit ▾",10,TEXT);quality.setPadding(dp(3),0,dp(6),0);quality.setTooltipText("Размер предпросмотра");previewTools.addView(quality,lp(-2,-1));quality.setContentDescription("Размер предпросмотра");quality.setOnClickListener(v->{PopupMenu p=new PopupMenu(this,quality);String[] labels={"Fit","Fill","Zoom"};int[] modes={0,3,4};for(int q=0;q<labels.length;q++){final int mode=modes[q];final String label=labels[q];item(p.getMenu(),label,true,()->{preview.setResizeMode(mode);quality.setText(label+" ▾");});}p.show();});
+        TextView quality=text("Fit ▾",10,TEXT);quality.setPadding(dp(3),0,dp(6),0);quality.setTooltipText("Размер предпросмотра");previewTools.addView(quality,lp(-2,-1));quality.setContentDescription("Размер предпросмотра");quality.setOnClickListener(v->{PopupMenu p=new PopupMenu(this,quality);p.setForceShowIcon(true);String[] labels={"Fit","Fill","Zoom"};int[] modes={0,3,4};for(int q=0;q<labels.length;q++){final int mode=modes[q];final String label=labels[q];item(p.getMenu(),q==2?"zoomIn":"fit",label,true,()->{preview.setResizeMode(mode);quality.setText(label+" ▾");});}p.show();});
         FrameLayout screen=new FrameLayout(this);screen.setBackgroundColor(Color.BLACK);LinearLayout.LayoutParams screenParams=new LinearLayout.LayoutParams(-1,0,1);screenParams.setMargins(dp(5),0,dp(5),0);previewPane.addView(screen,screenParams);
         preview=new EditorPreview(this);screen.addView(preview,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
         placeholder=text("Video Preview\n\nОткройте видео",12,0xff929292);placeholder.setGravity(Gravity.CENTER);screen.addView(placeholder,new FrameLayout.LayoutParams(-1,-1));
@@ -242,12 +259,30 @@ public final class MainActivity extends Activity {
             LinearLayout explorer=column(0xffa6a6a6);explorer.setPadding(dp(8),dp(6),dp(8),0);libraryContent.addView(explorer);
             TextView choose=text("▸  Открыть файл…",12,0xff284c7a);explorer.addView(choose,lp(-1,38));choose.setOnClickListener(v->pickVideo());
             TextView project=text("▸  Открыть проект…",11,TEXT);explorer.addView(project,lp(-1,38));project.setOnClickListener(v->pickProject());
+            ClassicIcon.decorate(choose, "video", 17);
+            ClassicIcon.decorate(project, "open", 17);
             explorer.addView(text("Документы и накопители\nчерез проводник Android",10,0xff474747),lp(-1,-2));
         }else{
             LinearLayout palette=column(0xffa6a6a6);palette.setPadding(dp(7),dp(4),dp(7),0);ScrollView scroll=new ScrollView(this);scroll.addView(palette);libraryContent.addView(scroll);
             String[] names=selectedTab==2?new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}:selectedTab==3?new String[]{"Визуальные эффекты","Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation","Reset effects"}:new String[]{"Solid Color","Titles & Text","Checkerboard","Color Gradient"};
             final int section=selectedTab;
-            for(int i=0;i<names.length;i++){final int index=i;TextView t=text(names[i]+"  ▸",11,TEXT);t.setContentDescription(names[i]);t.setBackground(border(0xffb4b4b4));t.setPadding(dp(5),0,dp(5),0);palette.addView(t,lp(-1,40));t.setOnClickListener(v->paletteAction(section,index));}
+            String[] icons = section == 3
+                    ? new String[]{"effects", "brightness", "palette", "key", "blur", "mosaic", "palette", "rotate", "undo"}
+                    : new String[]{"solid", "text", "checker", "gradient"};
+            for (int i = 0; i < names.length; i++) {
+                final int index = i;
+                TextView entry = text(names[i] + "  ▸", 11, TEXT);
+                entry.setContentDescription(names[i]);
+                entry.setBackground(border(0xffb4b4b4));
+                entry.setPadding(dp(5), 0, dp(5), 0);
+                if (section == 2) {
+                    ClassicIcon.decorate(entry, new EffectPreview(this, EffectPreview.transitionTile(i + 1)), 42, 26);
+                } else {
+                    ClassicIcon.decorate(entry, icons[i], 18);
+                }
+                palette.addView(entry, lp(-1, 40));
+                entry.setOnClickListener(v -> paletteAction(section, index));
+            }
             palette.addView(text(section==2?"Появление и исчезновение\nвыделенного фрагмента.":section==3?"Эффекты видны в Preview\nи сохраняются в MP4.":"Создать самостоятельный клип.\nТитры поверх видео: кнопка Text.",10,0xff383838),lp(-1,-2));
         }
     }
@@ -256,29 +291,29 @@ public final class MainActivity extends Activity {
             effectDialog("creative");
             return;
         }
-        PopupMenu popup=new PopupMenu(this,anchor);Menu m=popup.getMenu();
+        PopupMenu popup=new PopupMenu(this,anchor);popup.setForceShowIcon(true);Menu m=popup.getMenu();
         if(name.equals("File")){
-            item(m,"New",!job.running,this::newProject);item(m,"Timeline editor…",!job.running,this::openSequence);item(m,"Open video…",!job.running,this::pickVideo);item(m,"Open project…",!job.running,this::pickProject);
-            item(m,"Save project",prepared,this::saveLocalProject);item(m,"Save project as…",prepared,this::saveProjectAs);
-            item(m,"Restore previous project",!job.running&&!preferences.getString("previousProject","").isEmpty(),()->{try{applyProject(preferences.getString("previousProject",""));}catch(Exception e){setStatus("Не удалось восстановить проект: "+e.getMessage());}});
-            item(m,"Render As…",prepared&&!job.running,this::renderDialog);item(m,"Open rendered video",lastExport!=null,()->openResult(false));item(m,"Share rendered video",lastExport!=null,()->openResult(true));
+            item(m,"new","New",!job.running,this::newProject);item(m,"cut","Timeline editor…",!job.running,this::openSequence);item(m,"open","Open video…",!job.running,this::pickVideo);item(m,"open","Open project…",!job.running,this::pickProject);
+            item(m,"save","Save project",prepared,this::saveLocalProject);item(m,"save","Save project as…",prepared,this::saveProjectAs);
+            item(m,"undo","Restore previous project",!job.running&&!preferences.getString("previousProject","").isEmpty(),()->{try{applyProject(preferences.getString("previousProject",""));}catch(Exception e){setStatus("Не удалось восстановить проект: "+e.getMessage());}});
+            item(m,"render","Render As…",prepared&&!job.running,this::renderDialog);item(m,"video","Open rendered video",lastExport!=null,()->openResult(false));item(m,"share","Share rendered video",lastExport!=null,()->openResult(true));
         }else if(name.equals("Edit")){
-            item(m,"Undo",history.canUndo()&&!job.running,()->applyHistory(false));item(m,"Redo",history.canRedo()&&!job.running,()->applyHistory(true));
-            item(m,"Select all",prepared&&!job.running,()->{EditHistory.State old=snapshot();setRange(0,durationMs);history.record(old,snapshot());updateEnabled();});
-            item(m,"Set loop region…",prepared&&!job.running,this::preciseRange);item(m,"Timeline editor — Split / Delete / Move…",!job.running,this::openSequence);
+            item(m,"undo","Undo",history.canUndo()&&!job.running,()->applyHistory(false));item(m,"redo","Redo",history.canRedo()&&!job.running,()->applyHistory(true));
+            item(m,"range","Select all",prepared&&!job.running,()->{EditHistory.State old=snapshot();setRange(0,durationMs);history.record(old,snapshot());updateEnabled();});
+            item(m,"range","Set loop region…",prepared&&!job.running,this::preciseRange);item(m,"cut","Timeline editor — Split / Delete / Move…",!job.running,this::openSequence);
         }else if(name.equals("View")){
-            item(m,"Project Media",true,()->{selectedTab=0;libraryVisible=true;libraryPane.setVisibility(View.VISIBLE);renderLibrary();});
-            item(m,libraryVisible?"Hide docking area":"Show docking area",true,()->{libraryVisible=!libraryVisible;libraryPane.setVisibility(libraryVisible?View.VISIBLE:View.GONE);});
-            item(m,"Explorer",true,()->selectTab(1));item(m,"Transitions",true,()->selectTab(2));item(m,"Video FX",true,()->selectTab(3));item(m,"Media Generators",true,()->selectTab(4));item(m,"Zoom to project",prepared,()->timeline.fit());
+            item(m,"video","Project Media",true,()->{selectedTab=0;libraryVisible=true;libraryPane.setVisibility(View.VISIBLE);renderLibrary();});
+            item(m,"layout",libraryVisible?"Hide docking area":"Show docking area",true,()->{libraryVisible=!libraryVisible;libraryPane.setVisibility(libraryVisible?View.VISIBLE:View.GONE);});
+            item(m,"open","Explorer",true,()->selectTab(1));item(m,"transition","Transitions",true,()->selectTab(2));item(m,"effects","Video FX",true,()->selectTab(3));item(m,"gradient","Media Generators",true,()->selectTab(4));item(m,"fit","Zoom to project",prepared,()->timeline.fit());
         }else if(name.equals("Insert")){
-            item(m,"Marker",prepared&&!job.running,this::addMarker);item(m,"Markers…",!markers.isEmpty(),this::markerList);item(m,"Video track",prepared&&!job.running,()->pickLayer(false));item(m,"Audio track",prepared&&!job.running,()->pickLayer(true));item(m,"Titles & Text",prepared&&!job.running,()->effectDialog("title"));item(m,"Generated media…",!job.running,()->selectTab(4));
+            item(m,"marker","Marker",prepared&&!job.running,this::addMarker);item(m,"list","Markers…",!markers.isEmpty(),this::markerList);item(m,"video","Video track",prepared&&!job.running,()->pickLayer(false));item(m,"audio","Audio track",prepared&&!job.running,()->pickLayer(true));item(m,"text","Titles & Text",prepared&&!job.running,()->effectDialog("title"));item(m,"gradient","Generated media…",!job.running,()->selectTab(4));
         }else if(name.equals("Tools")){
-            item(m,"Render As…",prepared&&!job.running,this::renderDialog);item(m,"Media properties…",prepared,this::properties);item(m,"Mute audio",prepared&&!job.running,this::toggleMute);item(m,"Cancel rendering",job.running,()->job.cancel());
-            item(m,"Video effects…",prepared&&!job.running,()->effectDialog("effects"));item(m,"Transitions…",prepared&&!job.running,()->effectDialog("transitions"));item(m,"Titles & Text…",prepared&&!job.running,()->effectDialog("title"));item(m,"Layers…",prepared&&!job.running,()->effectDialog("layers"));item(m,"Reset effects",prepared&&!job.running,this::resetEffects);
+            item(m,"render","Render As…",prepared&&!job.running,this::renderDialog);item(m,"info","Media properties…",prepared,this::properties);item(m,"mute","Mute audio",prepared&&!job.running,this::toggleMute);item(m,"stop","Cancel rendering",job.running,()->job.cancel());
+            item(m,"effects","Video effects…",prepared&&!job.running,()->effectDialog("effects"));item(m,"transition","Transitions…",prepared&&!job.running,()->effectDialog("transitions"));item(m,"text","Titles & Text…",prepared&&!job.running,()->effectDialog("title"));item(m,"layers","Layers…",prepared&&!job.running,()->effectDialog("layers"));item(m,"undo","Reset effects",prepared&&!job.running,this::resetEffects);
         }else if(name.equals("Options")){
-            item(m,(looping?"✓ ":"")+"Loop playback",true,()->{looping=!looping;loopIcon.select(looping);});
-            item(m,"Project volume…",prepared,this::volumeDialog);item(m,"Select loop region…",prepared&&!job.running,this::preciseRange);
-        }else{item(m,"Help",true,this::help);item(m,"About…",true,()->message("Sony Vegas Video 2.5","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
+            item(m,"loop",(looping?"✓ ":"")+"Loop playback",true,()->{looping=!looping;loopIcon.select(looping);});
+            item(m,"volume","Project volume…",prepared,this::volumeDialog);item(m,"range","Select loop region…",prepared&&!job.running,this::preciseRange);
+        }else{item(m,"help","Help",true,this::help);item(m,"info","About…",true,()->message("Sony Vegas Video 2.6","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
         popup.show();
     }
     private void selectTab(int index){selectedTab=index;libraryVisible=true;libraryPane.setVisibility(View.VISIBLE);renderLibrary();}
@@ -328,7 +363,14 @@ public final class MainActivity extends Activity {
             runOnUiThread(()->{if(isDestroyed()||generation!=sourceGeneration||job.running)return;EffectSpec next=effects.copy();if(audio)next.audioUri=uri.toString();else next.overlayUri=uri.toString();playbackRate=1;applyEffects(next);effectDialog("layers");});
         }catch(Exception error){runOnUiThread(()->{if(!isDestroyed()&&generation==sourceGeneration)message("Не удалось добавить слой",error.getMessage()+"\nВыберите другой файл.");});}finally{reader.release();}});
     }
-    private void item(Menu menu,String name,boolean enabled,Runnable action){menu.add(name).setEnabled(enabled).setOnMenuItemClickListener(i->{if(action!=null)action.run();return true;});}
+    private void item(Menu menu, String glyph, String name, boolean enabled, Runnable action) {
+        android.graphics.drawable.Drawable icon = ClassicIcon.drawable(this, glyph);
+        if (!enabled) icon.setAlpha(90);
+        menu.add(name).setIcon(icon).setEnabled(enabled).setOnMenuItemClickListener(i -> {
+            if (action != null) action.run();
+            return true;
+        });
+    }
     private void openSequence(){
         if(job.running)return;
         Intent intent=new Intent(this,SequenceActivity.class);
@@ -401,7 +443,7 @@ public final class MainActivity extends Activity {
     private void applyVolume(){effects.masterGain=previewGain;if(currentPlayer!=null)try{currentPlayer.setMuted(muted);currentPlayer.setVolume(previewGain,previewGain);}catch(IllegalStateException ignored){}}
     private void updateVolume(){fader.gain(previewGain);volumeLabel.setText(previewGain==0?"−∞ dB":String.format(java.util.Locale.ROOT,"%.1f dB",20*Math.log10(previewGain)));if(timeline!=null)timeline.levels(effects.videoOpacity,previewGain,effects.audioPan);}
     private void applyRate(){if(currentPlayer!=null&&!currentPlayer.setPlaybackSpeed(playbackRate))playbackRate=1;if(rateLabel!=null)rateLabel.setText(String.format(java.util.Locale.ROOT,"Rate: %.2f ▾",playbackRate));}
-    private void speedMenu(TextView label){PopupMenu popup=new PopupMenu(this,label);boolean layered=!effects.audioUri.isEmpty()||!effects.overlayUri.isEmpty();for(float speed:new float[]{.5f,1,1.5f,2})item(popup.getMenu(),speed+"×",prepared&&(!layered||speed==1),()->{playbackRate=speed;applyRate();});if(layered)item(popup.getMenu(),"Слои: предпросмотр 1×",false,null);popup.show();}
+    private void speedMenu(TextView label){PopupMenu popup=new PopupMenu(this,label);popup.setForceShowIcon(true);boolean layered=!effects.audioUri.isEmpty()||!effects.overlayUri.isEmpty();for(float speed:new float[]{.5f,1,1.5f,2})item(popup.getMenu(),"speed",speed+"×",prepared&&(!layered||speed==1),()->{playbackRate=speed;applyRate();});if(layered)item(popup.getMenu(),"speed","Слои: предпросмотр 1×",false,null);popup.show();}
     private void volumeDialog(){final EditText value=new EditText(this);value.setContentDescription("Громкость проекта");value.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);value.setText(Integer.toString(Math.round(previewGain*100)));AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Громкость проекта, %").setView(value).setPositiveButton("OK",null).setNegativeButton("Отмена",null).create();dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{int number=Integer.parseInt(value.getText().toString());if(number<0||number>100)throw new NumberFormatException();EditHistory.State before=snapshot();previewGain=number/100f;applyVolume();updateVolume();history.record(before,snapshot());updateEnabled();dialog.dismiss();}catch(NumberFormatException invalid){value.setError("Введите число от 0 до 100.");}}));dialog.show();}
     private void preciseRange(){
         if(!prepared||job.running)return;LinearLayout form=column(CHROME);form.setPadding(dp(16),dp(8),dp(16),dp(8));

@@ -146,9 +146,13 @@ public final class SequenceActivity extends Activity {
         LinearLayout menu=row();
         menuScroll.addView(menu);
         root.addView(menuScroll,lp(-1,29));
-        for(String name:new String[]{"File","Edit","View","Insert","Эффекты","Tools","Help"}) {
+        String[][] menus = {{"File", "open"}, {"Edit", "cut"}, {"View", "view"}, {"Insert", "plus"},
+                {"Эффекты", "effects"}, {"Tools", "settings"}, {"Help", "help"}};
+        for (String[] entry : menus) {
+            String name = entry[0];
             TextView item=text(name,12);
-            item.setPadding(dp(10),0,dp(10),0);
+            item.setPadding(dp(6),0,dp(6),0);
+            ClassicIcon.decorate(item, entry[1], 14);
             menu.addView(item,lp(-2,29));
             item.setOnClickListener(view->menu(item,name));
         }
@@ -246,47 +250,48 @@ public final class SequenceActivity extends Activity {
             return;
         }
         PopupMenu popup=new PopupMenu(this,anchor);
+        popup.setForceShowIcon(true);
         Menu menu=popup.getMenu();
         boolean active=!busy&&!job.running, has=selected>=0;
         if(name.equals("File")) {
-            item(menu,"New",active,this::newProject);
-            item(menu,"Add videos…",active,this::pickVideos);
-            item(menu,"Open project…",active,this::pickProject);
-            item(menu,"Save project as…",active,this::saveAs);
-            item(menu,"Render As…",active&&!sequence.clips.isEmpty(),this::render);
-            item(menu,"Open result",lastExport!=null,()->result(false));
-            item(menu,"Share result",lastExport!=null,()->result(true));
+            item(menu,"new","New",active,this::newProject);
+            item(menu,"plus","Add videos…",active,this::pickVideos);
+            item(menu,"open","Open project…",active,this::pickProject);
+            item(menu,"save","Save project as…",active,this::saveAs);
+            item(menu,"render","Render As…",active&&!sequence.clips.isEmpty(),this::render);
+            item(menu,"video","Open result",lastExport!=null,()->result(false));
+            item(menu,"share","Share result",lastExport!=null,()->result(true));
         } else if(name.equals("Edit")) {
-            item(menu,"Undo",active&&!undo.isEmpty(),()->history(false));
-            item(menu,"Redo",active&&!redo.isEmpty(),()->history(true));
-            item(menu,"Split (S)",active&&has,this::split);
-            item(menu,"Trim selected event…",active&&has,this::trim);
-            item(menu,"Duplicate selected event",active&&has&&sequence.clips.size()<64,this::duplicate);
-            item(menu,"Delete (ripple)",active&&has,this::delete);
-            item(menu,"Move left",active&&selected>0,()->move(-1));
-            item(menu,"Move right",active&&has&&selected+1<sequence.clips.size(),()->move(1));
+            item(menu,"undo","Undo",active&&!undo.isEmpty(),()->history(false));
+            item(menu,"redo","Redo",active&&!redo.isEmpty(),()->history(true));
+            item(menu,"cut","Split (S)",active&&has,this::split);
+            item(menu,"range","Trim selected event…",active&&has,this::trim);
+            item(menu,"duplicate","Duplicate selected event",active&&has&&sequence.clips.size()<64,this::duplicate);
+            item(menu,"delete","Delete (ripple)",active&&has,this::delete);
+            item(menu,"left","Move left",active&&selected>0,()->move(-1));
+            item(menu,"right","Move right",active&&has&&selected+1<sequence.clips.size(),()->move(1));
         } else if(name.equals("View")) {
-            item(menu,"Zoom in",active,()->timeline.zoom(1.5f));
-            item(menu,"Zoom out",active,()->timeline.zoom(.7f));
-            item(menu,"Fit project",active,()->timeline.fit());
+            item(menu,"zoomIn","Zoom in",active,()->timeline.zoom(1.5f));
+            item(menu,"zoomOut","Zoom out",active,()->timeline.zoom(.7f));
+            item(menu,"fit","Fit project",active,()->timeline.fit());
         } else if(name.equals("Insert")) {
-            item(menu,"Video events…",active,this::pickVideos);
-            item(menu,"Video overlay…",active,()->pickLayer(OVERLAY));
-            item(menu,"Audio track…",active,()->pickLayer(AUDIO));
-            item(menu,"Titles & Text…",active,()->editEffects("title"));
+            item(menu,"video","Video events…",active,this::pickVideos);
+            item(menu,"layers","Video overlay…",active,()->pickLayer(OVERLAY));
+            item(menu,"audio","Audio track…",active,()->pickLayer(AUDIO));
+            item(menu,"text","Titles & Text…",active,()->editEffects("title"));
         } else if(name.equals("Tools")) {
-            item(menu,"Video FX…",active,()->editEffects("effects"));
-            item(menu,"Transitions…",active,()->editEffects("transitions"));
-            item(menu,"Titles & Text…",active,()->editEffects("title"));
-            item(menu,"Add audio track…",active,()->pickLayer(AUDIO));
-            item(menu,"Add video overlay…",active,()->pickLayer(OVERLAY));
-            item(menu,"Layer settings…",active,()->editEffects("layers"));
-            item(menu,"Remove audio track",active&&!effects.audioUri.isEmpty(),()->removeLayer(false));
-            item(menu,"Remove video overlay",active&&!effects.overlayUri.isEmpty(),()->removeLayer(true));
-            item(menu,(muted?"✓ ":"")+"Mute audio",active,this::toggleMute);
-            item(menu,"Cancel render",job.running,()->job.cancel());
+            item(menu,"effects","Video FX…",active,()->editEffects("effects"));
+            item(menu,"transition","Transitions…",active,()->editEffects("transitions"));
+            item(menu,"text","Titles & Text…",active,()->editEffects("title"));
+            item(menu,"audio","Add audio track…",active,()->pickLayer(AUDIO));
+            item(menu,"layers","Add video overlay…",active,()->pickLayer(OVERLAY));
+            item(menu,"layers","Layer settings…",active,()->editEffects("layers"));
+            item(menu,"delete","Remove audio track",active&&!effects.audioUri.isEmpty(),()->removeLayer(false));
+            item(menu,"delete","Remove video overlay",active&&!effects.overlayUri.isEmpty(),()->removeLayer(true));
+            item(menu,"mute",(muted?"✓ ":"")+"Mute audio",active,this::toggleMute);
+            item(menu,"stop","Cancel render",job.running,()->job.cancel());
         } else {
-            item(menu,"Editing help",true,()->message("Timeline Editor",
+            item(menu,"help","Editing help",true,()->message("Timeline Editor",
                     "Добавляйте видео через File → Add videos. Коснитесь дорожки, чтобы поставить курсор. "
                     +"S / ножницы разрезают фрагмент точно в этой позиции. Точные границы позволяют обрезать "
                     +"и восстановить края исходника. Delete удаляет фрагмент только из проекта; "
@@ -302,8 +307,10 @@ public final class SequenceActivity extends Activity {
         popup.show();
     }
 
-    private void item(Menu menu,String name,boolean enabled,Runnable action) {
-        menu.add(name).setEnabled(enabled).setOnMenuItemClickListener(item->{
+    private void item(Menu menu, String glyph, String name, boolean enabled, Runnable action) {
+        android.graphics.drawable.Drawable icon = ClassicIcon.drawable(this, glyph);
+        if (!enabled) icon.setAlpha(90);
+        menu.add(name).setIcon(icon).setEnabled(enabled).setOnMenuItemClickListener(item->{
             try {action.run();}catch(RuntimeException error){status("Не удалось выполнить действие: "+detail(error));}
             return true;
         });

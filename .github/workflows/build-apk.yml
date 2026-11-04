@@ -40,9 +40,9 @@ jobs:
         run: bash tools/build-device-tests.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Vegas_Video_2.5_CI_APKs
+          name: Vegas_Video_2.6_CI_APKs
           path: |
-            build/sdk/Sony_Vegas_Video_v2.5.apk
+            build/sdk/Sony_Vegas_Video_v2.6.apk
             build/device-tests/VegasVideo_device_tests.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
@@ -73,7 +73,7 @@ jobs:
           java-version: '17'
       - uses: actions/download-artifact@v4
         with:
-          name: Vegas_Video_2.5_CI_APKs
+          name: Vegas_Video_2.6_CI_APKs
           path: build
       - name: Enable emulator acceleration
         run: |

@@ -5,7 +5,7 @@ PACKAGE=com.personal.sonyvegasvideo
 RUNNER="$PACKAGE.test/$PACKAGE.ExportInstrumentation"
 OUT="$PROJECT/build/device-test-results"
 mkdir -p "$OUT/screenshots" "$OUT/diagnostics"
-APP="${VEGAS_APP_APK:-$PROJECT/build/sdk/Sony_Vegas_Video_v2.5.apk}"
+APP="${VEGAS_APP_APK:-$PROJECT/build/sdk/Sony_Vegas_Video_v2.6.apk}"
 TEST="${VEGAS_TEST_APK:-$PROJECT/build/device-tests/VegasVideo_device_tests.apk}"
 [[ -f "$APP" && -f "$TEST" ]] || { echo 'Build/download both APKs first.' >&2; exit 1; }
 adb wait-for-device

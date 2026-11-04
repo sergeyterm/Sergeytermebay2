@@ -94,9 +94,13 @@ final class EditorUiChecks {
         step("top Effects menu, adjustable visual effect and undo");
         s.clickText(main, "Эффекты");
         check(s.hasText("Визуальные эффекты"), "Top Effects button did not open the picker");
+        check(s.hasText("До") && s.hasText("После"), "Effect picker is missing the comparison");
         s.windowDescriptionClick("visualEffect");
+        check(s.hasText("Изгибает кадр бегущими волнами"), "The effect list is missing the visual explanation");
+        s.screenshot("qa-effects-list-" + size);
         s.windowClick("Волна");
         s.setProgressField("visualStrength", 650);
+        s.screenshot("qa-effects-comparison-" + size);
         s.windowClick("Применить");
         ready(main);
         EffectSpec creative = saveMain(saved).effects;
