@@ -8,7 +8,6 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -39,7 +38,7 @@ import java.util.List;
 /** Classic Sony-era workspace with native Android media playback and remux export. */
 public final class MainActivity extends Activity {
     private static final int PICK_VIDEO=110,SAVE_PROJECT=120,OPEN_PROJECT=121,PICK_AUDIO=122,PICK_OVERLAY=123;
-    private static final int PANEL=0xff999999,CHROME=0xffb7b7b7,TEXT=0xff202020;
+    private static final int PANEL=EditorStyle.SURFACE,CHROME=EditorStyle.BACKGROUND,TEXT=EditorStyle.TEXT;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExportJob job=ExportJob.get();
     private final ExportJob.Listener jobListener=this::renderJob;
@@ -126,20 +125,27 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         LinearLayout root=column(CHROME);root.setOnApplyWindowInsetsListener((v,insets)->{root.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
         setContentView(root);
-        windowTitle=text("Untitled — Sony Vegas Video",12,TEXT);windowTitle.setPadding(dp(8),0,0,0);windowTitle.setBackgroundColor(0xffc9c9c9);root.addView(windowTitle,lp(-1,25));
+        windowTitle=text("Untitled — Sony Vegas Video",16,TEXT);
+        EditorStyle.heading(windowTitle);
+        windowTitle.setPadding(dp(12),0,dp(12),0);
+        root.addView(windowTitle,lp(-1,40));
         HorizontalScrollView menuScroll=horizontalScroll();LinearLayout menuRow=row(CHROME);
         String[][] menus = {{"File", "open"}, {"Edit", "cut"}, {"View", "view"}, {"Insert", "plus"},
                 {"Эффекты", "effects"}, {"Tools", "settings"}, {"Options", "sliders"}, {"Help", "help"}};
         for (String[] entry : menus) {
             String name = entry[0];
             TextView item = text(name, 12, TEXT);
+            EditorStyle.heading(item);
+            EditorStyle.touch(item, name.equals("Эффекты") ? EditorStyle.TONAL : Color.TRANSPARENT, 11, 2);
             item.setPadding(dp(6), 0, dp(6), 0);
             ClassicIcon.decorate(item, entry[1], 14);
-            menuRow.addView(item, lp(-2, 29));
+            menuRow.addView(item, lp(-2, 36));
             item.setOnClickListener(v -> showMenu(item, name));
         }
-        menuScroll.addView(menuRow);root.addView(menuScroll,lp(-1,29));
-        LinearLayout toolbar=row(0xffa7a7a7);HorizontalScrollView toolbarScroll=horizontalScroll();toolbarScroll.addView(toolbar);root.addView(toolbarScroll,lp(-1,36));
+        menuRow.setPadding(dp(4),0,dp(4),0);menuScroll.addView(menuRow);root.addView(menuScroll,lp(-1,36));
+        LinearLayout toolbar=row(PANEL);toolbar.setPadding(dp(4),0,dp(4),0);
+        HorizontalScrollView toolbarScroll=horizontalScroll();toolbarScroll.addView(toolbar);
+        root.addView(toolbarScroll,lp(-1,40));
         tool(toolbar,"new","Новый проект",this::newProject,false);
         openIcon=tool(toolbar,"open","Открыть видео",this::pickVideo,false);
         tool(toolbar,"save","Сохранить проект",this::saveLocalProject,true);separator(toolbar);
@@ -156,39 +162,42 @@ public final class MainActivity extends Activity {
         tool(toolbar,"settings","Слои видео и аудио",()->effectDialog("layers"),true);
 
         boolean wide=getResources().getConfiguration().screenWidthDp>=640;
-        LinearLayout docking=row(PANEL);root.addView(docking,new LinearLayout.LayoutParams(-1,0,.52f));
-        libraryPane=column(PANEL);libraryPane.setBackground(border(PANEL));
+        LinearLayout docking=row(CHROME);docking.setPadding(dp(6),dp(6),dp(6),dp(6));
+        root.addView(docking,new LinearLayout.LayoutParams(-1,0,.52f));
+        libraryPane=column(PANEL);EditorStyle.panel(libraryPane);
+        libraryPane.setPadding(dp(3),dp(2),dp(3),dp(3));
         docking.addView(libraryPane,new LinearLayout.LayoutParams(0,-1,wide?.42f:.34f));
-        LinearLayout libraryTools=row(PANEL);libraryPane.addView(libraryTools,lp(-1,30));
+        LinearLayout libraryTools=row(Color.TRANSPARENT);libraryPane.addView(libraryTools,lp(-1,34));
         tool(libraryTools,"open","Импортировать медиа",this::pickVideo,false,28);
-        sourceLabel=text("Project Media",10,TEXT);sourceLabel.setSingleLine();sourceLabel.setEllipsize(TextUtils.TruncateAt.END);libraryTools.addView(sourceLabel,new LinearLayout.LayoutParams(0,-1,1));
+        sourceLabel=text("Project Media",11,TEXT);EditorStyle.heading(sourceLabel);libraryTools.addView(sourceLabel,new LinearLayout.LayoutParams(0,-1,1));
         libraryContent=new FrameLayout(this);libraryPane.addView(libraryContent,new LinearLayout.LayoutParams(-1,0,1));
-        HorizontalScrollView tabsScroll=horizontalScroll();LinearLayout tabs=row(PANEL);tabsScroll.addView(tabs);libraryPane.addView(tabsScroll,lp(-1,30));
+        HorizontalScrollView tabsScroll=horizontalScroll();LinearLayout tabs=row(Color.TRANSPARENT);tabsScroll.addView(tabs);libraryPane.addView(tabsScroll,lp(-1,34));
         String[][] tabsWithIcons = {{"Project Media", "video"}, {"Explorer", "open"},
                 {"Transitions", "transition"}, {"Video FX", "effects"}, {"Media Generators", "gradient"}};
         for (int i = 0; i < tabsWithIcons.length; i++) {
             final int index = i;
             TextView tab = text(tabsWithIcons[i][0], 10, TEXT);
-            tab.setPadding(dp(6), 0, dp(6), 0);
+            EditorStyle.touch(tab, Color.TRANSPARENT, 10, 2);
+            tab.setPadding(dp(8), 0, dp(8), 0);
             ClassicIcon.decorate(tab, tabsWithIcons[i][1], 13);
-            tabs.addView(tab, lp(-2, 29));
+            tabs.addView(tab, lp(-2, 34));
             tabLabels.add(tab);
             tab.setOnClickListener(v -> { selectedTab = index; renderLibrary(); });
         }
         libraryPane.setVisibility(libraryVisible?View.VISIBLE:View.GONE);
-        View divider=new View(this);divider.setBackgroundColor(0xff626262);docking.addView(divider,lp(3,-1));
-        LinearLayout previewPane=column(PANEL);previewPane.setBackground(border(PANEL));docking.addView(previewPane,new LinearLayout.LayoutParams(0,-1,wide?.58f:.66f));
-        LinearLayout previewTools=row(PANEL);previewPane.addView(previewTools,lp(-1,30));
+        View divider=new View(this);docking.addView(divider,lp(6,-1));
+        LinearLayout previewPane=column(PANEL);EditorStyle.panel(previewPane);docking.addView(previewPane,new LinearLayout.LayoutParams(0,-1,wide?.58f:.66f));
+        LinearLayout previewTools=row(Color.TRANSPARENT);previewPane.addView(previewTools,lp(-1,34));
         tool(previewTools,"settings","Свойства медиа",this::properties,true,28);
-        TextView previewTitle=text("Video Preview",11,TEXT);previewTools.addView(previewTitle,new LinearLayout.LayoutParams(0,-1,1));
-        TextView quality=text("Fit ▾",10,TEXT);quality.setPadding(dp(3),0,dp(6),0);quality.setTooltipText("Размер предпросмотра");previewTools.addView(quality,lp(-2,-1));quality.setContentDescription("Размер предпросмотра");quality.setOnClickListener(v->{PopupMenu p=new PopupMenu(this,quality);p.setForceShowIcon(true);String[] labels={"Fit","Fill","Zoom"};int[] modes={0,3,4};for(int q=0;q<labels.length;q++){final int mode=modes[q];final String label=labels[q];item(p.getMenu(),q==2?"zoomIn":"fit",label,true,()->{preview.setResizeMode(mode);quality.setText(label+" ▾");});}p.show();});
-        FrameLayout screen=new FrameLayout(this);screen.setBackgroundColor(Color.BLACK);LinearLayout.LayoutParams screenParams=new LinearLayout.LayoutParams(-1,0,1);screenParams.setMargins(dp(5),0,dp(5),0);previewPane.addView(screen,screenParams);
+        TextView previewTitle=text("Video Preview",12,TEXT);EditorStyle.heading(previewTitle);previewTools.addView(previewTitle,new LinearLayout.LayoutParams(0,-1,1));
+        TextView quality=text("Fit ▾",10,EditorStyle.ACCENT);EditorStyle.touch(quality,Color.TRANSPARENT,10,2);quality.setPadding(dp(3),0,dp(6),0);quality.setTooltipText("Размер предпросмотра");previewTools.addView(quality,lp(-2,-1));quality.setContentDescription("Размер предпросмотра");quality.setOnClickListener(v->{PopupMenu p=new PopupMenu(this,quality);p.setForceShowIcon(true);String[] labels={"Fit","Fill","Zoom"};int[] modes={0,3,4};for(int q=0;q<labels.length;q++){final int mode=modes[q];final String label=labels[q];item(p.getMenu(),q==2?"zoomIn":"fit",label,true,()->{preview.setResizeMode(mode);quality.setText(label+" ▾");});}p.show();});
+        FrameLayout screen=new FrameLayout(this);screen.setBackgroundColor(EditorStyle.PREVIEW);LinearLayout.LayoutParams screenParams=new LinearLayout.LayoutParams(-1,0,1);screenParams.setMargins(dp(5),0,dp(5),0);previewPane.addView(screen,screenParams);
         preview=new EditorPreview(this);screen.addView(preview,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
-        placeholder=text("Video Preview\n\nОткройте видео",12,0xff929292);placeholder.setGravity(Gravity.CENTER);screen.addView(placeholder,new FrameLayout.LayoutParams(-1,-1));
+        placeholder=text("Video Preview\n\nОткройте видео",12,0xffd7e3fa);placeholder.setBackgroundColor(EditorStyle.PREVIEW);placeholder.setGravity(Gravity.CENTER);screen.addView(placeholder,new FrameLayout.LayoutParams(-1,-1));
         preview.setOnPreparedListener(this::onVideoPrepared);
         preview.setOnCompletionListener(player->{if(looping&&prepared){seekPlayer(beginMs);preview.start();}else playIcon.select(false);});
         preview.setOnErrorListener((player,what,extra)->{prepared=false;currentPlayer=null;placeholder.setVisibility(View.VISIBLE);placeholder.setText("Видео недоступно\nВыберите файл повторно");setStatus("Не удалось открыть видео: "+preview.getErrorMessage()+". File → Open video — выбрать повторно.");updateEnabled();return true;});
-        LinearLayout previewTransport=row(PANEL);previewTransport.setGravity(Gravity.CENTER);previewPane.addView(previewTransport,lp(-1,32));
+        LinearLayout previewTransport=row(Color.TRANSPARENT);previewTransport.setGravity(Gravity.CENTER);previewPane.addView(previewTransport,lp(-1,32));
         tool(previewTransport,"begin","К началу выделения",()->seek(beginMs),true,28);
         tool(previewTransport,"back","Предыдущий кадр",()->step(-1),true,28);
         playIcon=tool(previewTransport,"play","Воспроизвести / пауза",this::togglePreview,true,28);
@@ -196,16 +205,22 @@ public final class MainActivity extends Activity {
         tool(previewTransport,"stop","Остановить",()->seek(beginMs),true,28);
         tool(previewTransport,"forward","Следующий кадр",()->step(1),true,28);
         tool(previewTransport,"end","К концу выделения",()->seek(endMs),true,28);
-        previewMeta=text("Project: —\nPreview: —",9,TEXT);previewMeta.setPadding(dp(6),0,0,0);previewPane.addView(previewMeta,lp(-1,29));
-        masterPane=column(PANEL);masterPane.setBackground(border(PANEL));docking.addView(masterPane,lp(wide?70:0,-1));
+        previewMeta=text("Project: —\nPreview: —",9,EditorStyle.SECONDARY);previewMeta.setPadding(dp(6),0,0,0);previewPane.addView(previewMeta,lp(-1,29));
+        masterPane=column(PANEL);EditorStyle.panel(masterPane);
+        LinearLayout.LayoutParams masterSize=lp(wide?70:0,-1);
+        if(wide)masterSize.setMarginStart(dp(6));
+        docking.addView(masterPane,masterSize);
+        masterPane.setPadding(dp(3),0,dp(3),0);
         masterPane.addView(text("Master",10,TEXT),lp(-1,26));TextView meterCaption=text("Preview",8,TEXT);meterCaption.setGravity(Gravity.CENTER);masterPane.addView(meterCaption,lp(-1,20));
-        LinearLayout bus=row(PANEL);masterPane.addView(bus,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout bus=row(Color.TRANSPARENT);masterPane.addView(bus,new LinearLayout.LayoutParams(-1,0,1));
         fader=new VerticalFader(this);fader.gain(previewGain);fader.listener(value->{previewGain=value;applyVolume();updateVolume();});bus.addView(fader,lp(21,-1));
         fader.setOnTouchListener((v,event)->{if(event.getActionMasked()==android.view.MotionEvent.ACTION_DOWN)gestureBefore=snapshot();if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP||event.getActionMasked()==android.view.MotionEvent.ACTION_CANCEL){if(gestureBefore!=null){history.record(gestureBefore,snapshot());gestureBefore=null;updateEnabled();}}return false;});
         meter=new MasterMeter(this);bus.addView(meter,new LinearLayout.LayoutParams(0,-1,1));
         volumeLabel=text("0.0 dB",9,TEXT);volumeLabel.setGravity(Gravity.CENTER);masterPane.addView(volumeLabel,lp(-1,23));
         muteIcon=tool(masterPane,"mute","Отключить звук исходного ролика",this::toggleMute,true,28);
-        timeline=new TimelineView(this);timeline.setBackground(border(0xff898989));root.addView(timeline,new LinearLayout.LayoutParams(-1,0,.48f));
+        timeline=new TimelineView(this);EditorStyle.panel(timeline);timeline.setClipToOutline(true);
+        LinearLayout.LayoutParams timelineSize=new LinearLayout.LayoutParams(-1,0,.48f);
+        timelineSize.setMargins(dp(6),0,dp(6),0);root.addView(timeline,timelineSize);
         timeline.setListener(new TimelineView.Listener(){
             @Override public void seek(int millis){MainActivity.this.seek(millis);}
             @Override public void editBegin(){gestureBefore=snapshot();preview.pause();}
@@ -220,8 +235,8 @@ public final class MainActivity extends Activity {
             @Override public void gain(float value){previewGain=value;applyVolume();updateVolume();}
             @Override public void pan(float value){effects.audioPan=value;updateSelection();}
         });
-        selectionLabel=text("Loop: 00:00:00.000 — 00:00:00.000",10,TEXT);selectionLabel.setPadding(dp(6),0,0,0);selectionLabel.setSingleLine();selectionLabel.setEllipsize(TextUtils.TruncateAt.END);selectionLabel.setOnClickListener(v->preciseRange());root.addView(selectionLabel,lp(-1,23));
-        HorizontalScrollView bottomScroll=horizontalScroll();LinearLayout transport=row(0xffa2a2a2);bottomScroll.addView(transport);root.addView(bottomScroll,lp(-1,36));
+        selectionLabel=text("Loop: 00:00:00.000 — 00:00:00.000",10,TEXT);selectionLabel.setPadding(dp(10),0,dp(10),0);selectionLabel.setSingleLine();selectionLabel.setEllipsize(TextUtils.TruncateAt.END);selectionLabel.setOnClickListener(v->preciseRange());root.addView(selectionLabel,lp(-1,23));
+        HorizontalScrollView bottomScroll=horizontalScroll();LinearLayout transport=row(PANEL);transport.setPadding(dp(4),0,dp(4),0);bottomScroll.addView(transport);root.addView(bottomScroll,lp(-1,40));
         loopIcon=tool(transport,"loop","Зациклить выделенный фрагмент",()->{looping=!looping;loopIcon.select(looping);},false);
         tool(transport,"begin","К началу",()->seek(beginMs),true);
         tool(transport,"play","Воспроизвести",this::togglePreview,true);tool(transport,"pause","Пауза",()->preview.pause(),true);tool(transport,"stop","Стоп",()->seek(beginMs),true);
@@ -230,40 +245,41 @@ public final class MainActivity extends Activity {
         tool(transport,"marker","Маркер",this::addMarker,true);
         tool(transport,"zoomOut","Уменьшить масштаб",()->timeline.zoom(.66f),true);
         tool(transport,"zoomIn","Увеличить масштаб",()->timeline.zoom(1.5f),true);tool(transport,"fit","Весь ролик",()->timeline.fit(),true);separator(transport);
-        rateLabel=text(String.format(java.util.Locale.ROOT,"Rate: %.2f ▾",playbackRate),10,TEXT);rateLabel.setPadding(dp(6),0,dp(6),0);transport.addView(rateLabel,lp(-2,36));rateLabel.setOnClickListener(v->speedMenu(rateLabel));rateLabel.setContentDescription("Скорость предпросмотра");rateLabel.setTooltipText("Скорость предпросмотра; экспорт проекта 1×");
+        rateLabel=text(String.format(java.util.Locale.ROOT,"Rate: %.2f ▾",playbackRate),10,TEXT);EditorStyle.touch(rateLabel,EditorStyle.TONAL,10,3);rateLabel.setPadding(dp(9),0,dp(9),0);transport.addView(rateLabel,lp(-2,40));rateLabel.setOnClickListener(v->speedMenu(rateLabel));rateLabel.setContentDescription("Скорость предпросмотра");rateLabel.setTooltipText("Скорость предпросмотра; экспорт проекта 1×");
         cancelIcon=tool(transport,"stop","Отменить экспорт",()->job.cancel(),false);cancelIcon.setVisibility(View.GONE);
         exportProgress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);exportProgress.setMax(100);root.addView(exportProgress,lp(-1,4));
-        status=text("File → Open video: импортируйте ролик для монтажа.",10,TEXT);status.setSingleLine();status.setEllipsize(TextUtils.TruncateAt.END);status.setPadding(dp(6),0,dp(6),0);status.setBackground(border(0xffb2b2b2));status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);status.setOnClickListener(v->message("Состояние",status.getText().toString()));root.addView(status,lp(-1,25));
+        status=text("File → Open video: импортируйте ролик для монтажа.",10,TEXT);status.setSingleLine();status.setEllipsize(TextUtils.TruncateAt.END);status.setPadding(dp(6),0,dp(6),0);status.setTextColor(EditorStyle.SECONDARY);EditorStyle.touch(status,Color.TRANSPARENT,8,2);status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);status.setOnClickListener(v->message("Состояние",status.getText().toString()));root.addView(status,lp(-1,25));
         loopIcon.select(looping);updateVolume();renderLibrary();updateEnabled();updateSelection();
     }
     private void renderLibrary(){
         if(libraryContent==null)return;libraryContent.removeAllViews();
-        for(int i=0;i<tabLabels.size();i++){TextView t=tabLabels.get(i);t.setBackground(border(i==selectedTab?0xffbcbcbc:PANEL));t.setTypeface(null,i==selectedTab?Typeface.BOLD:Typeface.NORMAL);}
+        for(int i=0;i<tabLabels.size();i++){TextView t=tabLabels.get(i);boolean active=i==selectedTab;t.setSelected(active);
+            t.setTextColor(active?EditorStyle.ACCENT:EditorStyle.SECONDARY);t.setTypeface(null,active?Typeface.BOLD:Typeface.NORMAL);}
         if(selectedTab==0){
-            LinearLayout body=row(0xffababab);libraryContent.addView(body,new FrameLayout.LayoutParams(-1,-1));
+            LinearLayout body=row(PANEL);libraryContent.addView(body,new FrameLayout.LayoutParams(-1,-1));
             boolean wide=getResources().getConfiguration().screenWidthDp>=640;
-            LinearLayout tree=column(0xffa3a3a3);body.addView(tree,lp(wide?95:48,-1));
+            LinearLayout tree=column(EditorStyle.TONAL);body.addView(tree,lp(wide?95:48,-1));
             String[] nodes={"▾ All Media","▾ Media Bins","  Video","  Audio","▸ Tags","▸ Smart Bins"};
-            for(String s:nodes){TextView node=text(s,wide?10:8,TEXT);node.setSingleLine();node.setEllipsize(TextUtils.TruncateAt.END);node.setPadding(dp(3),0,0,0);tree.addView(node,lp(-1,23));node.setOnClickListener(v->{if(videoUri==null)pickVideo();else properties();});}
-            ScrollView list=new ScrollView(this);body.addView(list,new LinearLayout.LayoutParams(0,-1,1));LinearLayout files=column(0xffb0b0b0);files.setPadding(dp(6),dp(6),dp(6),dp(6));list.addView(files);
+            for(String s:nodes){TextView node=text(s,wide?10:8,TEXT);node.setSingleLine();node.setEllipsize(TextUtils.TruncateAt.END);EditorStyle.touch(node,Color.TRANSPARENT,8,1);node.setPadding(dp(3),0,0,0);tree.addView(node,lp(-1,23));node.setOnClickListener(v->{if(videoUri==null)pickVideo();else properties();});}
+            ScrollView list=new ScrollView(this);body.addView(list,new LinearLayout.LayoutParams(0,-1,1));LinearLayout files=column(PANEL);files.setPadding(dp(6),dp(6),dp(6),dp(6));list.addView(files);
             if(videoUri!=null){
-                ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setBackgroundColor(0xff555555);
+                ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setBackground(EditorStyle.shape(this,EditorStyle.PREVIEW,8));image.setClipToOutline(true);
                 if(mediaInfo!=null&&mediaInfo.frames!=null&&mediaInfo.frames.length>0&&mediaInfo.frames[0]!=null)image.setImageBitmap(mediaInfo.frames[0]);
                 files.addView(image,lp(-1,wide?85:58));image.setOnClickListener(v->seek(beginMs));
                 TextView name=text(mediaName,10,TEXT);name.setGravity(Gravity.CENTER);name.setMaxLines(3);files.addView(name,lp(-1,-2));
                 files.addView(text(mediaInfo==null?"Медиа загружается…":mediaInfo.width+" × "+mediaInfo.height+"\n"+ClipMath.clock(durationMs),9,0xff444444),lp(-1,-2));
             }else{
-                TextView importText=text("＋\nImport Media…",11,0xff314e74);importText.setGravity(Gravity.CENTER);files.addView(importText,lp(-1,100));importText.setOnClickListener(v->pickVideo());
+                TextView importText=text("＋\nImport Media…",11,EditorStyle.ACCENT);EditorStyle.touch(importText,EditorStyle.TONAL,12,1);importText.setGravity(Gravity.CENTER);files.addView(importText,lp(-1,100));importText.setOnClickListener(v->pickVideo());
             }
         }else if(selectedTab==1){
-            LinearLayout explorer=column(0xffa6a6a6);explorer.setPadding(dp(8),dp(6),dp(8),0);libraryContent.addView(explorer);
+            LinearLayout explorer=column(PANEL);explorer.setPadding(dp(8),dp(6),dp(8),0);libraryContent.addView(explorer);
             TextView choose=text("▸  Открыть файл…",12,0xff284c7a);explorer.addView(choose,lp(-1,38));choose.setOnClickListener(v->pickVideo());
             TextView project=text("▸  Открыть проект…",11,TEXT);explorer.addView(project,lp(-1,38));project.setOnClickListener(v->pickProject());
             ClassicIcon.decorate(choose, "video", 17);
             ClassicIcon.decorate(project, "open", 17);
             explorer.addView(text("Документы и накопители\nчерез проводник Android",10,0xff474747),lp(-1,-2));
         }else{
-            LinearLayout palette=column(0xffa6a6a6);palette.setPadding(dp(7),dp(4),dp(7),0);ScrollView scroll=new ScrollView(this);scroll.addView(palette);libraryContent.addView(scroll);
+            LinearLayout palette=column(PANEL);palette.setPadding(dp(7),dp(4),dp(7),0);ScrollView scroll=new ScrollView(this);scroll.addView(palette);libraryContent.addView(scroll);
             String[] names=selectedTab==2?new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}:selectedTab==3?new String[]{"Визуальные эффекты","Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation","Reset effects"}:new String[]{"Solid Color","Titles & Text","Checkerboard","Color Gradient"};
             final int section=selectedTab;
             String[] icons = section == 3
@@ -273,14 +289,14 @@ public final class MainActivity extends Activity {
                 final int index = i;
                 TextView entry = text(names[i] + "  ▸", 11, TEXT);
                 entry.setContentDescription(names[i]);
-                entry.setBackground(border(0xffb4b4b4));
+                EditorStyle.touch(entry,EditorStyle.TONAL,9,1);
                 entry.setPadding(dp(5), 0, dp(5), 0);
                 if (section == 2) {
                     ClassicIcon.decorate(entry, new EffectPreview(this, EffectPreview.transitionTile(i + 1)), 42, 26);
                 } else {
                     ClassicIcon.decorate(entry, icons[i], 18);
                 }
-                palette.addView(entry, lp(-1, 40));
+                palette.addView(entry, lp(-1, 42));
                 entry.setOnClickListener(v -> paletteAction(section, index));
             }
             palette.addView(text(section==2?"Появление и исчезновение\nвыделенного фрагмента.":section==3?"Эффекты видны в Preview\nи сохраняются в MP4.":"Создать самостоятельный клип.\nТитры поверх видео: кнопка Text.",10,0xff383838),lp(-1,-2));
@@ -313,7 +329,7 @@ public final class MainActivity extends Activity {
         }else if(name.equals("Options")){
             item(m,"loop",(looping?"✓ ":"")+"Loop playback",true,()->{looping=!looping;loopIcon.select(looping);});
             item(m,"volume","Project volume…",prepared,this::volumeDialog);item(m,"range","Select loop region…",prepared&&!job.running,this::preciseRange);
-        }else{item(m,"help","Help",true,this::help);item(m,"info","About…",true,()->message("Sony Vegas Video 2.6","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
+        }else{item(m,"help","Help",true,this::help);item(m,"info","About…",true,()->message("Sony Vegas Video 2.7","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
         popup.show();
     }
     private void selectTab(int index){selectedTab=index;libraryVisible=true;libraryPane.setVisibility(View.VISIBLE);renderLibrary();}
@@ -519,9 +535,8 @@ public final class MainActivity extends Activity {
     private LinearLayout row(int color){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setBackgroundColor(color);return l;}
     private LinearLayout column(int color){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setBackgroundColor(color);return l;}
     private TextView text(String text,int size,int color){TextView t=new TextView(this);t.setText(text);t.setTextColor(color);t.setTextSize(size);t.setGravity(Gravity.CENTER_VERTICAL);t.setIncludeFontPadding(false);return t;}
-    private HorizontalScrollView horizontalScroll(){HorizontalScrollView s=new HorizontalScrollView(this);s.setHorizontalScrollBarEnabled(false);s.setFillViewport(false);return s;}
-    private GradientDrawable border(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setStroke(dp(1),0xff707070);return d;}
-    private void separator(LinearLayout parent){View line=new View(this);line.setBackgroundColor(0xff787878);LinearLayout.LayoutParams p=lp(1,24);p.gravity=Gravity.CENTER_VERTICAL;p.setMargins(dp(3),0,dp(3),0);parent.addView(line,p);}
-    private ClassicIcon tool(LinearLayout parent,String kind,String description,Runnable action,boolean needsMedia){return tool(parent,kind,description,action,needsMedia,36);}
+    private HorizontalScrollView horizontalScroll(){HorizontalScrollView s=new HorizontalScrollView(this);s.setHorizontalScrollBarEnabled(false);s.setFillViewport(true);return s;}
+    private void separator(LinearLayout parent){View line=new View(this);line.setBackgroundColor(EditorStyle.DIVIDER);LinearLayout.LayoutParams p=lp(1,20);p.gravity=Gravity.CENTER_VERTICAL;p.setMargins(dp(3),0,dp(3),0);parent.addView(line,p);}
+    private ClassicIcon tool(LinearLayout parent,String kind,String description,Runnable action,boolean needsMedia){return tool(parent,kind,description,action,needsMedia,40);}
     private ClassicIcon tool(LinearLayout parent,String kind,String description,Runnable action,boolean needsMedia,int size){ClassicIcon v=new ClassicIcon(this,kind,description);parent.addView(v,lp(size,size));if(action!=null)v.setOnClickListener(view->{if(v.isEnabled()&&(!job.running||v==cancelIcon||description.equals("Справка")))action.run();});if(needsMedia)mediaControls.add(v);return v;}
 }

@@ -90,14 +90,14 @@ public final class SequenceTimeline extends View {
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float h=header(),ruler=dp(38),rowHeight=Math.max(dp(22),(getHeight()-ruler-dp(16))/rows());
-        canvas.drawColor(0xff8a8a8a);
-        rect(canvas,0,0,h,getHeight(),0xff9ca5b1);
-        rect(canvas,h,0,getWidth(),ruler,0xffa6a6a6);
+        canvas.drawColor(EditorStyle.SURFACE);
+        rect(canvas,0,0,h,getHeight(),EditorStyle.TONAL);
+        rect(canvas,h,0,getWidth(),ruler,EditorStyle.TONAL);
         paint.setTypeface(Typeface.MONOSPACE);paint.setTextSize(dp(13));
         String code=ClipMath.clockCode(position);
         float available=Math.max(1,h-dp(7));
         if(paint.measureText(code)>available)paint.setTextSize(paint.getTextSize()*available/paint.measureText(code));
-        paint.setColor(0xff183756);canvas.drawText(code,dp(3),dp(24),paint);paint.setTypeface(Typeface.DEFAULT);
+        paint.setColor(EditorStyle.ACCENT);canvas.drawText(code,dp(3),dp(24),paint);paint.setTypeface(Typeface.DEFAULT);
         String[] labels=new String[rows()];
         int lane=0;labels[lane++]="1  Video";
         if(!effects.overlayUri.isEmpty())labels[lane++]="2  Overlay";
@@ -105,28 +105,28 @@ public final class SequenceTimeline extends View {
         int musicLane=-1;if(!effects.audioUri.isEmpty()){musicLane=lane;labels[lane]=(lane+1)+"  Music";lane++;}
         for(int i=0;i<labels.length;i++) {
             float top=ruler+i*rowHeight;
-            text(canvas,labels[i],dp(5),top+dp(17),0xff222222,10);
-            if(rowHeight>=dp(40))text(canvas,i==0?(!effects.isIdentity()?"FX active":"Source video"):i==audioLane?(muted?"Muted":"Source audio"):i==musicLane?"Music / loop":"Picture in picture",dp(5),top+dp(35),0xff404040,8);
-            rect(canvas,0,top+rowHeight-dp(1),getWidth(),top+rowHeight,0xff6f6f6f);
+            text(canvas,labels[i],dp(5),top+dp(17),EditorStyle.TEXT,10);
+            if(rowHeight>=dp(40))text(canvas,i==0?(!effects.isIdentity()?"FX active":"Source video"):i==audioLane?(muted?"Muted":"Source audio"):i==musicLane?"Music / loop":"Picture in picture",dp(5),top+dp(35),EditorStyle.SECONDARY,8);
+            rect(canvas,0,top+rowHeight-dp(1),getWidth(),top+rowHeight,EditorStyle.DIVIDER);
         }
         canvas.save();canvas.clipRect(h,0,getWidth(),getHeight());
         int step=1000;while(step/visible*(getWidth()-h)<dp(60)&&step<3600000)step*=2;
         for(double tick=Math.floor(offset/step)*step;tick<offset+visible;tick+=step) {
-            float line=x(tick);rect(canvas,line,dp(28),line+dp(1),getHeight()-dp(13),0xff727272);
-            text(canvas,ClipMath.clock((long)tick),line+dp(3),dp(24),0xff222222,9);
+            float line=x(tick);rect(canvas,line,dp(28),line+dp(1),getHeight()-dp(13),EditorStyle.DIVIDER);
+            text(canvas,ClipMath.clock((long)tick),line+dp(3),dp(24),EditorStyle.TEXT,9);
         }
         for(int i=0;i<sequence.clips.size();i++) {
             Sequence.Clip clip=sequence.clips.get(i);float left=x(timing.starts[i]),right=x(timing.ends[i]);
-            event(canvas,left,right,ruler,rowHeight,i==selected?0xffa6b8ce:0xff8496ac,i==selected?0xff3c5b83:0xff526a87,(i+1)+"  "+clip.name,ClipMath.clock(clip.inMs)+" → "+ClipMath.clock(clip.outMs));
-            event(canvas,left,right,ruler+audioLane*rowHeight,rowHeight,muted?0xff999999:i==selected?0xffcdb7a4:0xffae978b,muted?0xff777777:0xff866d5d,muted?"Muted":"Audio · "+(i+1),"");
+            event(canvas,left,right,ruler,rowHeight,i==selected?0xffd1e1ff:0xffe4edff,i==selected?EditorStyle.ACCENT:EditorStyle.VIDEO,(i+1)+"  "+clip.name,ClipMath.clock(clip.inMs)+" → "+ClipMath.clock(clip.outMs));
+            event(canvas,left,right,ruler+audioLane*rowHeight,rowHeight,muted?0xffe3e8f0:i==selected?0xffc7e9dc:0xffe1f2ea,muted?0xff637084:EditorStyle.AUDIO,muted?"Muted":"Audio · "+(i+1),"");
         }
         drawTransitions(canvas,ruler,rowHeight,audioLane);
-        if(!effects.overlayUri.isEmpty())event(canvas,x(0),x(duration()),ruler+rowHeight,rowHeight,0xffb5a6c5,0xff72518b,"Video overlay","Loop to project");
-        if(musicLane>=0)event(canvas,x(0),x(duration()),ruler+musicLane*rowHeight,rowHeight,0xffa6c4a8,0xff4a7854,"Music","Loop to project");
-        rect(canvas,x(position),ruler,x(position)+dp(1),getHeight()-dp(14),0xff111111);
-        rect(canvas,h,getHeight()-dp(13),getWidth(),getHeight(),0xffb2b2b2);
+        if(!effects.overlayUri.isEmpty())event(canvas,x(0),x(duration()),ruler+rowHeight,rowHeight,0xffeee5fd,0xff66499b,"Video overlay","Loop to project");
+        if(musicLane>=0)event(canvas,x(0),x(duration()),ruler+musicLane*rowHeight,rowHeight,0xffe1f0dc,0xff406c37,"Music","Loop to project");
+        rect(canvas,x(position),ruler,x(position)+dp(1),getHeight()-dp(14),EditorStyle.ACCENT);
+        rect(canvas,h,getHeight()-dp(13),getWidth(),getHeight(),EditorStyle.TONAL);
         float thumb=thumb(),left=h+(getWidth()-h-thumb)*(float)(offset/Math.max(1,duration()-visible));
-        rect(canvas,left,getHeight()-dp(11),left+thumb,getHeight()-dp(2),0xffd8d8d8);
+        rounded(canvas,left,getHeight()-dp(11),left+thumb,getHeight()-dp(2),4,0xffaabbd7);
         canvas.restore();
     }
     private void drawTransitions(Canvas canvas,float ruler,float rowHeight,int audioLane) {
@@ -135,8 +135,8 @@ public final class SequenceTimeline extends View {
             float left=x(timing.starts[i+1]),right=x(timing.ends[i]);
             for(int lane:new int[]{0,audioLane}) {
                 float top=ruler+lane*rowHeight+dp(3),bottom=ruler+(lane+1)*rowHeight-dp(3);
-                rect(canvas,left,top,right,bottom,0x806c7f34);
-                paint.setColor(0xfff8df90);paint.setStrokeWidth(dp(1));
+                rect(canvas,left,top,right,bottom,0x90765113);
+                paint.setColor(0xfff9dd92);paint.setStrokeWidth(dp(1));
                 canvas.drawLine(left,top,right,bottom,paint);canvas.drawLine(left,bottom,right,top,paint);
             }
             if(right-left>dp(45)) {
@@ -145,12 +145,16 @@ public final class SequenceTimeline extends View {
             }
         }
     }
+    private void rounded(Canvas canvas,float left,float top,float right,float bottom,int radius,int color) {
+        paint.setColor(color);
+        canvas.drawRoundRect(left,top,right,bottom,dp(radius),dp(radius),paint);
+    }
     private void event(Canvas canvas,float left,float right,float top,float height,int body,int cap,String name,String detail) {
-        rect(canvas,left+1,top+dp(3),right-1,top+height-dp(3),body);
-        rect(canvas,left+1,top+dp(3),right-1,top+Math.min(dp(23),height-dp(3)),cap);
+        rounded(canvas,left+1,top+dp(3),right-1,top+height-dp(3),5,body);
+        rounded(canvas,left+1,top+dp(3),right-1,top+Math.min(dp(23),height-dp(3)),5,cap);
         canvas.save();canvas.clipRect(left+dp(3),top+dp(3),right-dp(2),top+height-dp(3));
         text(canvas,name,left+dp(6),top+dp(17),0xffffffff,10);
-        if(height>=dp(44)&&!detail.isEmpty())text(canvas,detail,left+dp(6),top+dp(39),0xff263445,9);
+        if(height>=dp(44)&&!detail.isEmpty())text(canvas,detail,left+dp(6),top+dp(39),EditorStyle.TEXT,9);
         canvas.restore();
     }
     private void scrollTo(float x) {

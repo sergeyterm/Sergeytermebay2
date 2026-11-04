@@ -75,60 +75,63 @@ public final class TimelineView extends View {
     private void rect(Canvas c,float l,float t,float r,float b,int color){p.setColor(color);p.setStyle(Paint.Style.FILL);c.drawRect(l,t,r,b,p);}
     private void line(Canvas c,float x,float y,float x2,float y2,int color){p.setColor(color);p.setStrokeWidth(dp(1));c.drawLine(x,y,x2,y2,p);}
     private void text(Canvas c,String value,float x,float y,float size,int color){p.setColor(color);p.setTextSize(dp(size));p.setTypeface(Typeface.DEFAULT);c.drawText(value,x,y,p);}
+    private void rounded(Canvas c,float l,float t,float r,float b,int radius,int color) {
+        p.setColor(color);p.setStyle(Paint.Style.FILL);
+        c.drawRoundRect(l,t,r,b,dp(radius),dp(radius),p);
+    }
     @Override protected void onDraw(Canvas c){
         float h=header(),r=ruler(),rh=row(),w=getWidth(),height=getHeight();
-        rect(c,0,0,w,height,0xff898989);rect(c,0,0,h,r,0xff9e9e9e);
-        p.setTypeface(Typeface.create(Typeface.MONOSPACE,Typeface.BOLD));p.setTextSize(dp(h/density<120?16:20));p.setColor(0xff223c62);
+        rect(c,0,0,w,height,EditorStyle.SURFACE);rect(c,0,0,h,r,EditorStyle.TONAL);
+        p.setTypeface(Typeface.create(Typeface.MONOSPACE,Typeface.BOLD));p.setTextSize(dp(h/density<120?16:20));p.setColor(EditorStyle.ACCENT);
         String code=ClipMath.clockCode(position);if(p.measureText(code)>h-dp(10))p.setTextSize(p.getTextSize()*(h-dp(10))/p.measureText(code));c.drawText(code,dp(5),dp(29),p);
         drawHeader(c,0,r,h,rh,false);drawHeader(c,1,r+rh,h,rh,true);
         c.save();c.clipRect(h,0,w,height);
-        rect(c,h,0,w,r,0xff9c9c9c);
+        rect(c,h,0,w,r,EditorStyle.TONAL);
         if(duration>0){
-            rect(c,x(start),dp(14),x(end),dp(24),0xffd9bc6e);
-            rect(c,x(start),r,x(end),r+rh*2,0xff929dab);
+            rect(c,x(start),dp(14),x(end),dp(24),0xffefcf82);
+            rect(c,x(start),r,x(end),r+rh*2,0xffedf3ff);
         }
         double[] steps={100,200,500,1000,2000,5000,10000,30000,60000,120000,300000,600000,1800000,3600000};
         double step=steps[steps.length-1];
         for(double candidate:steps)if(candidate/visible*(w-h)>=dp(66)){step=candidate;break;}
         for(double t=Math.floor(offset/step)*step;t<offset+visible;t+=step){
-            float xx=x(t);line(c,xx,dp(34),xx,height-dp(15),0xff727272);
-            text(c,ClipMath.clock((long)t),xx+dp(3),dp(33),9,0xff252525);
-            for(int j=1;j<4;j++)line(c,x(t+j*step/4),dp(39),x(t+j*step/4),r,0xff777777);
+            float xx=x(t);line(c,xx,dp(34),xx,height-dp(15),EditorStyle.DIVIDER);
+            text(c,ClipMath.clock((long)t),xx+dp(3),dp(33),9,EditorStyle.TEXT);
+            for(int j=1;j<4;j++)line(c,x(t+j*step/4),dp(39),x(t+j*step/4),r,0xffa9b8ce);
         }
-        line(c,h,r,w,r,0xff616161);line(c,h,r+rh,w,r+rh,0xff616161);line(c,h,r+rh*2,w,r+rh*2,0xff616161);
+        line(c,h,r,w,r,EditorStyle.DIVIDER);line(c,h,r+rh,w,r+rh,EditorStyle.DIVIDER);line(c,h,r+rh*2,w,r+rh*2,EditorStyle.DIVIDER);
         if(duration>0){drawVideo(c,r+dp(5),rh-dp(10));if(hasAudio)drawAudio(c,r+rh+dp(5),rh-dp(10));}
-        else{text(c,"Откройте видео или проект",h+dp(16),r+dp(36),12,0xff343434);}
+        else{text(c,"Откройте видео или проект",h+dp(16),r+dp(36),12,EditorStyle.SECONDARY);}
         for(int i=0;i<markers.size();i++){
             float xx=x(markers.get(i));line(c,xx,dp(10),xx,height-dp(15),0xff9a602c);
             rect(c,xx,0,xx+dp(17),dp(13),0xffd9a363);text(c,Integer.toString(i+1),xx+dp(4),dp(10),9,0xff3f2c1c);
         }
         if(duration>0){
             handle(c,x(start),false);handle(c,x(end),true);
-            float xx=x(position);line(c,xx,dp(24),xx,height-dp(15),0xff171717);
-            Path head=new Path();head.moveTo(xx-dp(5),dp(23));head.lineTo(xx+dp(5),dp(23));head.lineTo(xx,dp(30));head.close();p.setColor(0xff272727);c.drawPath(head,p);
+            float xx=x(position);line(c,xx,dp(24),xx,height-dp(15),EditorStyle.ACCENT);
+            Path head=new Path();head.moveTo(xx-dp(5),dp(23));head.lineTo(xx+dp(5),dp(23));head.lineTo(xx,dp(30));head.close();p.setColor(EditorStyle.ACCENT);c.drawPath(head,p);
         }
-        rect(c,h,height-dp(14),w,height,0xffaeaeae);
+        rect(c,h,height-dp(14),w,height,EditorStyle.TONAL);
         float scrollWidth=(float)Math.max(dp(30),(w-h)*Math.min(1,visible/Math.max(visible,duration)));
         float left=h+(w-h-scrollWidth)*(float)(offset/Math.max(1,duration-visible));
-        rect(c,left+1,height-dp(12),left+scrollWidth-1,height-dp(2),0xffd2d2d2);
-        line(c,left+1,height-dp(12),left+scrollWidth-1,height-dp(12),0xffeeeeee);
-        c.restore();line(c,h,0,h,height,0xff575757);
+        rounded(c,left+1,height-dp(12),left+scrollWidth-1,height-dp(2),5,0xffaabbd7);
+        c.restore();line(c,h,0,h,height,EditorStyle.DIVIDER);
     }
     private void drawHeader(Canvas c,int index,float y,float h,float rh,boolean audio){
-        rect(c,0,y,h,y+rh,index==0?0xff8c9eb6:0xff9b9b9b);line(c,0,y,h,y,0xffd1d1d1);line(c,0,y+rh,h,y+rh,0xff575757);
-        rect(c,dp(5),y+dp(6),dp(24),y+dp(22),audio?0xff8c5b52:0xff445b83);
+        rect(c,0,y,h,y+rh,index==0?EditorStyle.TONAL:0xfff0f6f3);line(c,0,y,h,y,EditorStyle.DIVIDER);line(c,0,y+rh,h,y+rh,EditorStyle.DIVIDER);
+        rounded(c,dp(5),y+dp(6),dp(24),y+dp(22),4,audio?EditorStyle.AUDIO:EditorStyle.VIDEO);
         text(c,Integer.toString(index+1),dp(11),y+dp(18),10,Color.WHITE);
-        text(c,audio?"Audio":"Video",dp(30),y+dp(18),11,0xff202020);
-        rect(c,h-dp(26),y+dp(5),h-dp(5),y+dp(26),(audio?muted:opacity==0)?0xffd7b266:0xffababab);
-        text(c,"M",h-dp(22),y+dp(20),11,0xff252525);
-        if(rh>dp(48))text(c,audio?(gain==0?"Vol: −∞ dB":String.format(java.util.Locale.ROOT,"Vol: %.1f dB",20*Math.log10(gain))):"Level: "+Math.round(opacity*100)+" %",dp(7),y+dp(43),9,0xff292929);
-        if(rh>dp(66)){float value=audio?gain:opacity;float thumb=dp(9)+(h-dp(19))*value;line(c,dp(9),y+dp(55),h-dp(10),y+dp(55),0xff4e4e4e);rect(c,thumb-dp(3),y+dp(50),thumb+dp(4),y+dp(60),0xffd0d0d0);}
-        if(rh>dp(86))text(c,audio?"Pan: "+(Math.abs(pan)<.01f?"Center":(pan<0?"L ":"R ")+Math.round(Math.abs(pan)*100)):"Video FX…",dp(7),y+dp(79),9,0xff263d5d);
-        if(audio&&rh>dp(103)){float thumb=dp(9)+(h-dp(19))*(pan+1)/2;line(c,dp(9),y+dp(95),h-dp(10),y+dp(95),0xff4e4e4e);rect(c,thumb-dp(3),y+dp(90),thumb+dp(4),y+dp(100),0xffd0d0d0);}
+        text(c,audio?"Audio":"Video",dp(30),y+dp(18),11,EditorStyle.TEXT);
+        rounded(c,h-dp(26),y+dp(5),h-dp(5),y+dp(26),5,(audio?muted:opacity==0)?0xfff7dd9c:EditorStyle.SELECTED);
+        text(c,"M",h-dp(22),y+dp(20),11,EditorStyle.TEXT);
+        if(rh>dp(48))text(c,audio?(gain==0?"Vol: −∞ dB":String.format(java.util.Locale.ROOT,"Vol: %.1f dB",20*Math.log10(gain))):"Level: "+Math.round(opacity*100)+" %",dp(7),y+dp(43),9,EditorStyle.SECONDARY);
+        if(rh>dp(66)){float value=audio?gain:opacity;float thumb=dp(9)+(h-dp(19))*value;line(c,dp(9),y+dp(55),h-dp(10),y+dp(55),0xffa9b8ce);rounded(c,thumb-dp(4),y+dp(51),thumb+dp(4),y+dp(59),4,EditorStyle.ACCENT);}
+        if(rh>dp(86))text(c,audio?"Pan: "+(Math.abs(pan)<.01f?"Center":(pan<0?"L ":"R ")+Math.round(Math.abs(pan)*100)):"Video FX…",dp(7),y+dp(79),9,EditorStyle.ACCENT);
+        if(audio&&rh>dp(103)){float thumb=dp(9)+(h-dp(19))*(pan+1)/2;line(c,dp(9),y+dp(95),h-dp(10),y+dp(95),0xffa9b8ce);rounded(c,thumb-dp(4),y+dp(91),thumb+dp(4),y+dp(99),4,EditorStyle.ACCENT);}
     }
     private void drawVideo(Canvas c,float y,float height){
         float l=x(0),right=x(duration);
-        rect(c,l,y,right,y+height,0xff9dadc3);rect(c,l,y,right,y+dp(17),0xff516b92);
+        rect(c,l,y,right,y+height,0xffdce8ff);rect(c,l,y,right,y+dp(17),EditorStyle.VIDEO);
         text(c,name,l+dp(5),y+dp(12),10,Color.WHITE);
         if(frames!=null&&frames.length>0){
             c.save();c.clipRect(l,y+dp(18),right,y+height-dp(2));
@@ -148,24 +151,24 @@ public final class TimelineView extends View {
     }
     private void drawAudio(Canvas c,float y,float height){
         float l=x(0),right=x(duration),middle=y+height*.58f;
-        rect(c,l,y,right,y+height,muted?0xffa7a19a:0xffc9b8ad);
-        rect(c,l,y,right,y+dp(16),muted?0xff817d78:0xff8d5b51);text(c,name+(muted?"  [M]":""),l+dp(5),y+dp(12),10,Color.WHITE);
-        line(c,l,middle,right,middle,0xff8f7a75);
+        rect(c,l,y,right,y+height,muted?0xffe3e8f0:0xffd4ede2);
+        rect(c,l,y,right,y+dp(16),muted?0xff637084:EditorStyle.AUDIO);text(c,name+(muted?"  [M]":""),l+dp(5),y+dp(12),10,Color.WHITE);
+        line(c,l,middle,right,middle,0xff97c6b6);
         if(waveform!=null){
-            p.setColor(muted?0xff8a817b:0xff713e3b);p.setStrokeWidth(Math.max(dp(1),(right-l)/waveform.length));
+            p.setColor(muted?0xff798495:EditorStyle.AUDIO);p.setStrokeWidth(Math.max(dp(1),(right-l)/waveform.length));
             for(int i=0;i<waveform.length;i++){
                 float xx=x((double)i*duration/waveform.length);if(xx<header()||xx>getWidth())continue;
                 float amp=Math.min(1,waveform[i])*height*.32f;c.drawLine(xx,middle-amp,xx,middle+amp,p);
             }
-        }else text(c,"Аудиодорожка",Math.max(l,header())+dp(7),middle,10,0xff6d504b);
-        shade(c,l,right,y,height);line(c,l,y,right,y,0xffe5d9d1);
+        }else text(c,"Аудиодорожка",Math.max(l,header())+dp(7),middle,10,EditorStyle.AUDIO);
+        shade(c,l,right,y,height);line(c,l,y,right,y,0xffb8ddce);
     }
     private void shade(Canvas c,float l,float right,float y,float height){
-        rect(c,l,y,x(start),y+height,0x65434343);rect(c,x(end),y,right,y+height,0x65434343);
-        line(c,x(start),y,x(start),y+height,0xffe6ca73);line(c,x(end),y,x(end),y+height,0xffe6ca73);
+        rect(c,l,y,x(start),y+height,0x65142136);rect(c,x(end),y,right,y+height,0x65142136);
+        line(c,x(start),y,x(start),y+height,0xffe8bf62);line(c,x(end),y,x(end),y+height,0xffe8bf62);
     }
     private void handle(Canvas c,float x,boolean right){
-        p.setColor(0xffffd572);Path path=new Path();path.moveTo(x,dp(12));path.lineTo(x+(right?-dp(10):dp(10)),dp(12));path.lineTo(x,dp(23));path.close();c.drawPath(path,p);
+        p.setColor(0xffe8bf62);Path path=new Path();path.moveTo(x,dp(12));path.lineTo(x+(right?-dp(10):dp(10)),dp(12));path.lineTo(x,dp(23));path.close();c.drawPath(path,p);
     }
     @Override public boolean onTouchEvent(MotionEvent e){
         if(!isEnabled()||duration<=0)return false;

@@ -11,8 +11,7 @@ public final class VerticalFader extends View {
     public void listener(Listener value){listener=value;}
     public void gain(float value){gain=Math.max(0,Math.min(1,value));invalidate();}
     @Override protected void onDraw(Canvas c){float d=getResources().getDisplayMetrics().density,x=getWidth()/2f,top=10*d,bottom=getHeight()-12*d,y=bottom-(bottom-top)*gain;
-        p.setColor(0xff555555);c.drawRect(x-d,top,x+d,bottom,p);p.setColor(0xffd6d6d6);c.drawRect(2*d,y-5*d,getWidth()-2*d,y+5*d,p);
-        p.setColor(0xfff6f6f6);c.drawLine(2*d,y-5*d,getWidth()-2*d,y-5*d,p);p.setColor(0xff444444);c.drawLine(3*d,y,getWidth()-3*d,y,p);}
+        p.setColor(0xffa9b8ce);c.drawRect(x-d,top,x+d,bottom,p);p.setColor(EditorStyle.ACCENT);c.drawRoundRect(2*d,y-5*d,getWidth()-2*d,y+5*d,4*d,4*d,p);}
     @Override public boolean onTouchEvent(MotionEvent e){if(!isEnabled())return false;float d=getResources().getDisplayMetrics().density;
         if(e.getAction()==MotionEvent.ACTION_DOWN||e.getAction()==MotionEvent.ACTION_MOVE){getParent().requestDisallowInterceptTouchEvent(true);gain(1-(e.getY()-10*d)/Math.max(1,getHeight()-22*d));if(listener!=null)listener.changed(gain);return true;}
         if(e.getAction()==MotionEvent.ACTION_UP){getParent().requestDisallowInterceptTouchEvent(false);performClick();return true;}return true;}

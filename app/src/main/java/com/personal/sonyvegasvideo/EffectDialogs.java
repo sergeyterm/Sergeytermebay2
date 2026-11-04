@@ -106,6 +106,7 @@ public final class EffectDialogs {
             ClassicIcon.decorate(dialog.getButton(AlertDialog.BUTTON_POSITIVE), "check", 15);
             ClassicIcon.decorate(dialog.getButton(AlertDialog.BUTTON_NEGATIVE), "delete", 15);
             ClassicIcon.decorate(dialog.getButton(AlertDialog.BUTTON_NEUTRAL), "undo", 15);
+            EditorStyle.touch(dialog.getButton(AlertDialog.BUTTON_POSITIVE), EditorStyle.SELECTED, 12, 2);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
                 try{for(Runnable check:validation)check.run();accepted.accept(draft.copy().normalize());dialog.dismiss();}
                 catch(IllegalArgumentException invalid){/* The invalid input already carries its field error. */}
@@ -129,7 +130,7 @@ public final class EffectDialogs {
         else {if(!"animation".equals(section)){out.brightness=0;out.contrast=0;out.saturation=1;out.hue=0;out.blur=0;out.mosaic=0;out.chromaKey=false;out.chromaColor=defaults.chromaColor;out.chromaThreshold=defaults.chromaThreshold;out.preset="none";}out.zoomStart=1;out.zoomEnd=1;out.rotationStart=0;out.rotationEnd=0;}
         return out.normalize();
     }
-    private static TextView note(Activity a,LinearLayout body,String text){TextView view=new TextView(a);view.setText(text);view.setTextSize(12);view.setTextColor(0xff444444);view.setPadding(0,dp(a,8),0,dp(a,8));body.addView(view);return view;}
+    private static TextView note(Activity a,LinearLayout body,String text){TextView view=new TextView(a);view.setText(text);view.setTextSize(13);view.setTextColor(EditorStyle.SECONDARY);view.setPadding(0,dp(a,8),0,dp(a,8));body.addView(view);return view;}
     private interface FloatChange{void change(float value);}
     private static void slider(Activity a,LinearLayout body,String name,String caption,float low,float high,float value,int decimals,FloatChange changed){
         TextView label=new TextView(a);label.setTextSize(13);ClassicIcon.decorate(label,settingIcon(name),16);body.addView(label);SeekBar bar=new SeekBar(a);bar.setContentDescription(name);bar.setMax(1000);int progress=Math.round((value-low)*1000/(high-low));bar.setProgress(Math.max(0,Math.min(1000,progress)));body.addView(bar,new LinearLayout.LayoutParams(-1,dp(a,44)));
@@ -141,6 +142,8 @@ public final class EffectDialogs {
             String selected, Consumer<String> changed) {
         ClassicIcon.decorate(note(a, body, caption), settingIcon(name), 17);
         Spinner spinner = new Spinner(a, Spinner.MODE_DROPDOWN);
+        spinner.setPopupBackgroundResource(R.drawable.editor_popup);
+        spinner.setBackgroundTintList(android.content.res.ColorStateList.valueOf(EditorStyle.ACCENT));
         spinner.setContentDescription(name);
         spinner.setAdapter(new BaseAdapter() {
             @Override public int getCount() { return labels.length; }
@@ -194,6 +197,8 @@ public final class EffectDialogs {
             setPadding(dp(activity, 8), dp(activity, 4), dp(activity, 8), dp(activity, 4));
             thumbnail = new ImageView(activity);
             thumbnail.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            thumbnail.setBackground(EditorStyle.shape(activity, EditorStyle.TONAL, 8));
+            thumbnail.setClipToOutline(true);
             thumbnail.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             addView(thumbnail, new LayoutParams(dp(activity, expanded ? 84 : 50), dp(activity, expanded ? 53 : 32)));
             LinearLayout text = new LinearLayout(activity);
@@ -203,19 +208,22 @@ public final class EffectDialogs {
             addView(text, textSize);
             title = new TextView(activity);
             title.setTextSize(14);
-            title.setTextColor(0xff202d37);
+            title.setTextColor(EditorStyle.TEXT);
             text.addView(title);
             description = new TextView(activity);
             description.setTextSize(12);
-            description.setTextColor(0xff4b5964);
+            description.setTextColor(EditorStyle.SECONDARY);
             text.addView(description);
         }
     }
 
     private static void comparison(Activity a, LinearLayout body, EffectPreview after) {
         LinearLayout row = new LinearLayout(a);
-        row.setPadding(0, dp(a, 6), 0, dp(a, 10));
-        body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        row.setBackground(EditorStyle.shape(a, EditorStyle.TONAL, 14));
+        row.setPadding(dp(a, 6), dp(a, 6), dp(a, 6), dp(a, 6));
+        LinearLayout.LayoutParams comparisonSize = new LinearLayout.LayoutParams(-1, -2);
+        comparisonSize.setMargins(0, dp(a, 6), 0, dp(a, 10));
+        body.addView(row, comparisonSize);
         previewColumn(a, row, "До", new EffectPreview(a, 0), 4);
         previewColumn(a, row, "После", after, 0);
     }
@@ -230,6 +238,7 @@ public final class EffectDialogs {
         caption.setGravity(Gravity.CENTER);
         caption.setText(label);
         caption.setTextSize(12);
+        caption.setTextColor(EditorStyle.SECONDARY);
         column.addView(caption);
         ImageView frame = new ImageView(a);
         frame.setContentDescription(label + " · пример эффекта");

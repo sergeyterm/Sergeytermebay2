@@ -15,23 +15,19 @@ import android.widget.TextView;
 /** Small vector toolbar icons, drawn locally rather than copied bitmap resources. */
 public final class ClassicIcon extends View {
     public final String kind;
-    private final Paint paint = new Paint(3);
     private final Glyph glyph;
-    private boolean selected;
     public ClassicIcon(Context context, String kind, String description) {
         super(context); this.kind = kind;
         glyph = new Glyph(kind);
         setContentDescription(description); setTooltipText(description); setFocusable(true); setClickable(true);
         setMinimumWidth(dp(36)); setMinimumHeight(dp(36));
+        int color = "play".equals(kind) || "render".equals(kind) || "open".equals(kind)
+                ? EditorStyle.TONAL : Color.TRANSPARENT;
+        EditorStyle.touch(this, color, 12, 2);
     }
-    public void select(boolean value) { selected = value; setSelected(value); invalidate(); }
+    public void select(boolean value) { setSelected(value); }
     @Override public void setEnabled(boolean enabled) { super.setEnabled(enabled); invalidate(); }
     @Override protected void onDraw(Canvas canvas) {
-        if (selected || isPressed()) {
-            paint.setColor(0xffbacadc); canvas.drawRect(1, 1, getWidth()-1, getHeight()-1, paint);
-            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(1)); paint.setColor(0xff425c7c);
-            canvas.drawRect(1, 1, getWidth()-1, getHeight()-1, paint); paint.setStyle(Paint.Style.FILL);
-        }
         canvas.save();
         float scale = dp(21) / 24f;
         canvas.translate((getWidth()-24*scale)/2f, (getHeight()-24*scale)/2f);
@@ -90,7 +86,7 @@ public final class ClassicIcon extends View {
     }
 
     private static final class Glyph {
-        private static final int INK = 0xff365574;
+        private static final int INK = EditorStyle.ACCENT;
         private static final int GOLD = 0xffcf9841;
         private static final int LIGHT = 0xffdbe8ee;
         private final String kind;
@@ -105,7 +101,7 @@ public final class ClassicIcon extends View {
                 case "new": rect(canvas,5,2,18,22,0xffe7edf2); line(canvas,5,2,18,2,0xff425367); line(canvas,5,2,5,22,0xff425367); line(canvas,5,22,18,22,0xff425367); line(canvas,18,2,18,22,0xff425367); line(canvas,8,7,15,7,0xff8095a9); break;
                 case "open": rect(canvas,2,6,10,10,0xff8b6c1e); rect(canvas,2,9,21,21,0xffd4ad45); path(canvas,new float[]{3,12,23,12,19,21,1,21},0xffefcf75); line(canvas,3,12,23,12,0xff796525); break;
                 case "save": rect(canvas,3,2,21,22,0xff3e5b7a); rect(canvas,7,2,17,10,0xffd9dfe5); rect(canvas,7,14,18,22,0xffe9edf0); rect(canvas,14,3,16,8,0xff49617b); break;
-                case "play": path(canvas,new float[]{6,3,21,12,6,21},0xff243c2c); break;
+                case "play": path(canvas,new float[]{6,3,21,12,6,21},EditorStyle.ACCENT); break;
                 case "pause": rect(canvas,5,4,10,20,0xff263a43); rect(canvas,14,4,19,20,0xff263a43); break;
                 case "stop": rect(canvas,5,5,19,19,0xff293941); break;
                 case "begin": line(canvas,4,3,4,21,0xff293941); path(canvas,new float[]{19,4,7,12,19,20},0xff293941); break;

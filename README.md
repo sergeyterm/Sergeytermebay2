@@ -3,9 +3,10 @@
 Личный неофициальный видеоредактор для Android с классической компоновкой Vegas.
 Это самостоятельное приложение, не продукт Sony/VEGAS и не порт Windows-версии.
 
-Версия 2.6 использует AndroidX Media3 1.11.1 для общего предпросмотра и экспорта:
+Версия 2.7 использует AndroidX Media3 1.11.1 для общего предпросмотра и экспорта:
 обрезка, последовательность клипов, эффекты, текст, фоновые генераторы и дополнительные
-слои. Классический интерфейс и имя пакета `com.personal.sonyvegasvideo` сохранены.
+слои. Светлая тема обновляет панели, кнопки и диалоги. Классическая компоновка
+Vegas, названия меню и имя пакета `com.personal.sonyvegasvideo` сохранены.
 Описание операций и практических ограничений — [README_RU.md](README_RU.md).
 
 ## Сборка
@@ -30,14 +31,14 @@ bash tools/build-device-tests.sh
 
 Выходные файлы:
 
-- `build/sdk/Sony_Vegas_Video_v2.6.apk`
+- `build/sdk/Sony_Vegas_Video_v2.7.apk`
 - `build/device-tests/VegasVideo_device_tests.apk`
 
 ## GitHub Actions
 
 Workflow `Build and test Vegas Video` запускается при push в main/master и вручную.
 Он устанавливает Gradle 8.11.1 и SDK 36, выполняет JVM-проверки, генерирует тестовые
-видео и собирает оба APK. Артефакт — `Vegas_Video_2.6_CI_APKs`.
+видео и собирает оба APK. Артефакт — `Vegas_Video_2.7_CI_APKs`.
 
 Матрица Android-тестов: API 30 (AOSP) и API 35 (Google APIs), x86_64 с KVM.
 На каждом эмуляторе выполняются четыре запуска:

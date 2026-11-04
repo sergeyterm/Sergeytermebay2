@@ -1,11 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#3F5D83</item>
-        <item name="android:statusBarColor">#B7B7B7</item>
-        <item name="android:navigationBarColor">#B7B7B7</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#2459B9</item>
+        <item name="android:colorControlNormal">#52647F</item>
+        <item name="android:textColorPrimary">#18243B</item>
+        <item name="android:textColorSecondary">#4C5B73</item>
+        <item name="android:windowBackground">#F3F5FA</item>
+        <item name="android:statusBarColor">#F3F5FA</item>
+        <item name="android:navigationBarColor">#F3F5FA</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:alertDialogTheme">@style/EditorDialog</item>
+        <item name="android:popupMenuStyle">@style/EditorPopupMenu</item>
+    </style>
+    <style name="EditorDialog" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">#2459B9</item>
+        <item name="android:textColorPrimary">#18243B</item>
+        <item name="android:textColorSecondary">#4C5B73</item>
+        <item name="android:windowBackground">@drawable/editor_dialog</item>
+        <item name="android:windowElevation">16dp</item>
+    </style>
+    <style name="EditorPopupMenu" parent="android:style/Widget.Material.Light.PopupMenu">
+        <item name="android:popupBackground">@drawable/editor_popup</item>
+        <item name="android:popupElevation">10dp</item>
     </style>
 </resources>

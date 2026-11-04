@@ -41,7 +41,9 @@ final class EditorUiChecks {
         s.await(()->s.main(()->main.hasWindowFocus()&&main.getWindow().getDecorView().getWidth()>0),10000,"Main workspace never received window focus");
         check(s.main(()->!description(main,"Render As… — сохранить MP4").isEnabled()),"Render enabled with no media");
         for(String[] menu:new String[][]{{"File","New"},{"Edit","Select all"},{"View","Hide docking area"},{"Insert","Marker"},{"Tools","Render As…"},{"Options","Loop playback"},{"Help","About…"}}){
-            s.clickText(main,menu[0]);s.menuReady(menu[1]);check(s.hasText(menu[1]),"Menu item missing: "+menu[0]+" / "+menu[1]);s.back();
+            s.clickText(main,menu[0]);s.menuReady(menu[1]);check(s.hasText(menu[1]),"Menu item missing: "+menu[0]+" / "+menu[1]);
+            if("File".equals(menu[0]))s.screenshot("qa-file-menu-"+size);
+            s.back();
         }
         importMain(source);EditorPreview preview=preview(main);ready(main);check(!s.main(preview::isPlaying),"Import started playback");check(s.main(preview::getDuration)>5000,"Imported media duration missing");
         step("docking, Explorer, preview sizing and visible paused video");workspaceViews(source);

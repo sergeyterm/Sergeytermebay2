@@ -40,7 +40,7 @@ import java.util.concurrent.Executors;
 /** Native sequence editor. All edits remain non-destructive until MP4 export. */
 public final class SequenceActivity extends Activity {
     private static final int IMPORT=210, OPEN=211, SAVE=212, AUDIO=213, OVERLAY=214;
-    private static final int BG=0xffa2a2a2, FG=0xff222222;
+    private static final int BG=EditorStyle.BACKGROUND, FG=EditorStyle.TEXT;
     private static final int PROJECT_LIMIT=131072, HISTORY_LIMIT=64;
     private Sequence sequence=new Sequence();
     private EffectSpec effects=new EffectSpec();
@@ -139,27 +139,33 @@ public final class SequenceActivity extends Activity {
             return insets;
         });
         setContentView(root);
-        TextView title=text("Sony Vegas Video — Timeline Editor",13);
-        title.setPadding(dp(7),0,0,0);
-        root.addView(title,lp(-1,27));
+        TextView title=text("Sony Vegas Video — Timeline Editor",16);
+        EditorStyle.heading(title);
+        title.setPadding(dp(12),0,dp(12),0);
+        root.addView(title,lp(-1,40));
         HorizontalScrollView menuScroll=scroll();
         LinearLayout menu=row();
+        menu.setPadding(dp(4),0,dp(4),0);
         menuScroll.addView(menu);
-        root.addView(menuScroll,lp(-1,29));
+        root.addView(menuScroll,lp(-1,36));
         String[][] menus = {{"File", "open"}, {"Edit", "cut"}, {"View", "view"}, {"Insert", "plus"},
                 {"Эффекты", "effects"}, {"Tools", "settings"}, {"Help", "help"}};
         for (String[] entry : menus) {
             String name = entry[0];
             TextView item=text(name,12);
+            EditorStyle.heading(item);
+            EditorStyle.touch(item,name.equals("Эффекты")?EditorStyle.TONAL:Color.TRANSPARENT,11,2);
             item.setPadding(dp(6),0,dp(6),0);
             ClassicIcon.decorate(item, entry[1], 14);
-            menu.addView(item,lp(-2,29));
+            menu.addView(item,lp(-2,36));
             item.setOnClickListener(view->menu(item,name));
         }
         HorizontalScrollView toolbarScroll=scroll();
         LinearLayout bar=row();
+        bar.setBackgroundColor(EditorStyle.SURFACE);
+        bar.setPadding(dp(4),0,dp(4),0);
         toolbarScroll.addView(bar);
-        root.addView(toolbarScroll,lp(-1,36));
+        root.addView(toolbarScroll,lp(-1,40));
         button(bar,"new","Новый монтаж",this::newProject,false);
         button(bar,"open","Добавить видео",this::pickVideos,false);
         button(bar,"save","Сохранить проект",this::saveAs,false);
@@ -173,23 +179,33 @@ public final class SequenceActivity extends Activity {
         button(bar,"settings","Эффекты монтажа",()->editEffects("effects"),false);
         button(bar,"render","Render As…",this::render,true);
         LinearLayout docking=row();
+        docking.setPadding(dp(6),dp(6),dp(6),dp(6));
         root.addView(docking,new LinearLayout.LayoutParams(-1,0,.50f));
         LinearLayout left=column();
-        docking.addView(left,new LinearLayout.LayoutParams(0,-1,.38f));
-        left.addView(text("Project Media / Events",11),lp(-1,27));
+        EditorStyle.panel(left);
+        left.setPadding(dp(3),dp(2),dp(3),dp(3));
+        LinearLayout.LayoutParams leftSize=new LinearLayout.LayoutParams(0,-1,.38f);
+        leftSize.setMarginEnd(dp(6));
+        docking.addView(left,leftSize);
+        left.addView(panelHeading("Project Media / Events","video"),lp(-1,34));
         ScrollView list=new ScrollView(this);
         left.addView(list,new LinearLayout.LayoutParams(-1,0,1));
         clipList=column();
+        clipList.setBackgroundColor(Color.TRANSPARENT);
         list.addView(clipList);
         LinearLayout right=column();
+        EditorStyle.panel(right);
         docking.addView(right,new LinearLayout.LayoutParams(0,-1,.62f));
-        right.addView(text("Video Preview",11),lp(-1,27));
+        right.addView(panelHeading("Video Preview","view"),lp(-1,34));
         FrameLayout screen=new FrameLayout(this);
-        screen.setBackgroundColor(Color.BLACK);
-        right.addView(screen,new LinearLayout.LayoutParams(-1,0,1));
+        screen.setBackgroundColor(EditorStyle.PREVIEW);
+        LinearLayout.LayoutParams screenSize=new LinearLayout.LayoutParams(-1,0,1);
+        screenSize.setMargins(dp(5),0,dp(5),0);
+        right.addView(screen,screenSize);
         preview=new EditorPreview(this);
         screen.addView(preview,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
         label=text("Выберите или импортируйте видео",10);
+        label.setPadding(dp(8),0,dp(8),0);
         label.setSingleLine();
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         right.addView(label,lp(-1,28));
@@ -215,15 +231,22 @@ public final class SequenceActivity extends Activity {
         timeline=new SequenceTimeline(this);
         timeline.listener(this::seek);
         timeline.setOnLongClickListener(view->{trim();return true;});
-        root.addView(timeline,new LinearLayout.LayoutParams(-1,0,.50f));
+        EditorStyle.panel(timeline);
+        timeline.setClipToOutline(true);
+        LinearLayout.LayoutParams timelineSize=new LinearLayout.LayoutParams(-1,0,.50f);
+        timelineSize.setMargins(dp(6),0,dp(6),0);
+        root.addView(timeline,timelineSize);
         time=text("00:00:00.000",12);
         time.setTypeface(Typeface.MONOSPACE);
+        time.setPadding(dp(10),0,dp(10),0);
         time.setContentDescription("Позиция и длительность монтажного проекта");
         root.addView(time,lp(-1,25));
         HorizontalScrollView transportScroll=scroll();
         LinearLayout transport=row();
+        transport.setBackgroundColor(EditorStyle.SURFACE);
+        transport.setPadding(dp(4),0,dp(4),0);
         transportScroll.addView(transport);
-        root.addView(transportScroll,lp(-1,36));
+        root.addView(transportScroll,lp(-1,40));
         button(transport,"begin","В начало",()->seek(0),true);
         playIcon=button(transport,"play","Play / Pause",this::toggle,true);
         button(transport,"stop","Stop",()->seek(0),true);
@@ -237,7 +260,9 @@ public final class SequenceActivity extends Activity {
         root.addView(progress,lp(-1,5));
         status=text("Импорт → разрезать / эффекты → Render As…",11);
         status.setMaxLines(3);
-        status.setPadding(dp(5),dp(3),dp(5),dp(3));
+        status.setTextColor(EditorStyle.SECONDARY);
+        EditorStyle.touch(status,Color.TRANSPARENT,8,2);
+        status.setPadding(dp(10),dp(3),dp(10),dp(3));
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         status.setContentDescription("Состояние монтажного редактора");
         status.setOnClickListener(view->message("Состояние",status.getText().toString()));
@@ -393,15 +418,20 @@ public final class SequenceActivity extends Activity {
         if(sequence.clips.isEmpty()) {
             TextView empty=text("＋ Добавить видео",12);
             empty.setGravity(Gravity.CENTER);
+            empty.setTextColor(EditorStyle.ACCENT);
+            EditorStyle.touch(empty,EditorStyle.TONAL,10,2);
             clipList.addView(empty,lp(-1,100));
             empty.setOnClickListener(view->pickVideos());
         } else for(int i=0;i<sequence.clips.size();i++) {
             final int index=i;
             Sequence.Clip clip=sequence.clips.get(i);
-            TextView item=text((i+1)+"  "+clip.name+"\n"+ClipMath.clockCode(clip.inMs)+" — "+ClipMath.clockCode(clip.outMs),10);
-            item.setPadding(dp(5),dp(5),dp(5),dp(5));
+            TextView item=text((i+1)+"  "+clip.name+"\n"+ClipMath.clockCode(clip.inMs)+" — "+ClipMath.clockCode(clip.outMs),11);
+            EditorStyle.touch(item,EditorStyle.TONAL,10,2);
+            item.setPadding(dp(8),dp(4),dp(8),dp(4));
+            item.setMaxLines(3);
+            item.setEllipsize(android.text.TextUtils.TruncateAt.END);
             item.setContentDescription("Фрагмент "+(i+1)+": "+clip.name);
-            item.setBackgroundColor(i==selected?0xffb7c6d8:0xffb5b5b5);
+            item.setSelected(i==selected);
             clipList.addView(item,lp(-1,65));
             item.setOnClickListener(view->seek(offset(index)));
         }
@@ -430,7 +460,7 @@ public final class SequenceActivity extends Activity {
     private void updateSelection() {
         selected=timing.indexAt(cursor);
         for(int i=0;i<clipList.getChildCount();i++) {
-            if(!sequence.clips.isEmpty())clipList.getChildAt(i).setBackgroundColor(i==selected?0xffb7c6d8:0xffb5b5b5);
+            if(!sequence.clips.isEmpty())clipList.getChildAt(i).setSelected(i==selected);
         }
         timeline.project(sequence,selected);
         if(selected>=0)label.setText(sequence.clips.get(selected).name);
@@ -891,9 +921,16 @@ public final class SequenceActivity extends Activity {
     private LinearLayout column(){LinearLayout view=new LinearLayout(this);view.setOrientation(LinearLayout.VERTICAL);view.setBackgroundColor(BG);return view;}
     private LinearLayout.LayoutParams lp(int width,int height){return new LinearLayout.LayoutParams(width<0?width:dp(width),height<0?height:dp(height));}
     private TextView text(String value,int size){TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(FG);view.setGravity(Gravity.CENTER_VERTICAL);return view;}
-    private HorizontalScrollView scroll(){HorizontalScrollView view=new HorizontalScrollView(this);view.setHorizontalScrollBarEnabled(false);return view;}
+    private TextView panelHeading(String label,String icon) {
+        TextView heading=text(label,11);
+        EditorStyle.heading(heading);
+        ClassicIcon.decorate(heading,icon,15);
+        heading.setPadding(dp(7),0,dp(7),0);
+        return heading;
+    }
+    private HorizontalScrollView scroll(){HorizontalScrollView view=new HorizontalScrollView(this);view.setHorizontalScrollBarEnabled(false);view.setFillViewport(true);return view;}
     private ClassicIcon button(LinearLayout parent,String kind,String name,Runnable action,boolean needsClip) {
-        ClassicIcon view=new ClassicIcon(this,kind,name);parent.addView(view,lp(36,36));
+        ClassicIcon view=new ClassicIcon(this,kind,name);parent.addView(view,lp(40,40));
         view.setOnClickListener(ignored->{
             if(view!=cancelIcon&&(busy||job.running))return;
             try {action.run();}catch(RuntimeException error){status("Не удалось выполнить действие: "+detail(error));}
