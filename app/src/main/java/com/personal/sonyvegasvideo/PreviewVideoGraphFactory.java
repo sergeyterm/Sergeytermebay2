@@ -18,7 +18,7 @@ import androidx.media3.effect.SingleInputVideoGraph;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-/** Preserves decoded preview frames on older codec output surfaces. */
+/** Preserves decoded frames on older codec surfaces and in layered previews. */
 final class PreviewVideoGraphFactory implements VideoGraph.Factory {
     private final VideoGraph.Factory delegate;
 

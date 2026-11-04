@@ -11,7 +11,6 @@ import android.widget.FrameLayout;
 import androidx.media3.common.C;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
-import androidx.media3.effect.MultipleInputVideoGraph;
 import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.CompositionPlayer;
 import androidx.media3.ui.AspectRatioFrameLayout;
@@ -197,10 +196,12 @@ public final class EditorPreview extends FrameLayout {
         try{
             CompositionPlayer.Builder builder=new CompositionPlayer.Builder(application)
                     .setLooper(Looper.getMainLooper()).setPerStreamMediaProgressionEnabled(true);
-            if(Build.VERSION.SDK_INT<=30){
-                builder.setVideoGraphFactory(new PreviewVideoGraphFactory(composition.sequences.size()>1))
+            boolean multipleSequences=composition.sequences.size()>1;
+            if(Build.VERSION.SDK_INT<=30||multipleSequences){
+                // After a paused seek, keep each transition lane's first decoded frame.
+                builder.setVideoGraphFactory(new PreviewVideoGraphFactory(multipleSequences))
                         .experimentalSetLateThresholdToDropInputUs(C.TIME_UNSET);
-            }else if(composition.sequences.size()>1)builder.setVideoGraphFactory(new MultipleInputVideoGraph.Factory());
+            }
             if(view==null)createPlayerView();
             CompositionPlayer current=builder.build();player=current;this.composition=composition;canvasAspect=aspect;view.setPlayer(current);applyCanvasAspect();
             current.addListener(new Player.Listener(){
