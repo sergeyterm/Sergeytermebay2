@@ -146,7 +146,7 @@ public final class SequenceActivity extends Activity {
         LinearLayout menu=row();
         menuScroll.addView(menu);
         root.addView(menuScroll,lp(-1,29));
-        for(String name:new String[]{"File","Edit","View","Insert","Tools","Help"}) {
+        for(String name:new String[]{"File","Edit","View","Insert","Эффекты","Tools","Help"}) {
             TextView item=text(name,12);
             item.setPadding(dp(10),0,dp(10),0);
             menu.addView(item,lp(-2,29));
@@ -241,6 +241,10 @@ public final class SequenceActivity extends Activity {
     }
 
     private void menu(View anchor,String name) {
+        if ("Эффекты".equals(name)) {
+            editEffects("creative");
+            return;
+        }
         PopupMenu popup=new PopupMenu(this,anchor);
         Menu menu=popup.getMenu();
         boolean active=!busy&&!job.running, has=selected>=0;

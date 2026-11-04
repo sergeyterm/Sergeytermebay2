@@ -28,6 +28,14 @@ public final class EffectSpecTest {
         EffectSpec mix=clean.copy();mix.videoOpacity=Float.NaN;mix.audioPan=7;mix.normalize();check(mix.videoOpacity==1&&mix.audioPan==1);
         mix.videoOpacity=-3;mix.audioPan=-9;mix.normalize();check(mix.videoOpacity==0&&mix.audioPan==-1);check(!mix.isIdentity());
         mix=clean.copy();mix.audioPan=Float.POSITIVE_INFINITY;mix.normalize();check(mix.audioPan==0&&mix.isIdentity());
+        EffectSpec visual = clean.copy();
+        visual.visualEffect = "wave";
+        check(!visual.normalize().isIdentity());
+        visual.visualStrength = -1;
+        check(visual.normalize().visualStrength == 0 && visual.isIdentity());
+        visual.visualEffect = "missing_effect";
+        visual.visualStrength = Float.NaN;
+        check(visual.normalize().visualEffect.equals("none") && visual.isIdentity());
         System.out.println("EffectSpecTest OK: "+checks+" checks");
     }
     private static void check(boolean valid){checks++;if(!valid)throw new AssertionError("EffectSpec check "+checks);}

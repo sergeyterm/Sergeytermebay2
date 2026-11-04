@@ -128,7 +128,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         windowTitle=text("Untitled — Sony Vegas Video",12,TEXT);windowTitle.setPadding(dp(8),0,0,0);windowTitle.setBackgroundColor(0xffc9c9c9);root.addView(windowTitle,lp(-1,25));
         HorizontalScrollView menuScroll=horizontalScroll();LinearLayout menuRow=row(CHROME);
-        String[] menus={"File","Edit","View","Insert","Tools","Options","Help"};
+        String[] menus={"File","Edit","View","Insert","Эффекты","Tools","Options","Help"};
         for(String name:menus){TextView item=text(name,12,TEXT);item.setPadding(dp(9),0,dp(9),0);menuRow.addView(item,lp(-2,29));item.setOnClickListener(v->showMenu(item,name));}
         menuScroll.addView(menuRow);root.addView(menuScroll,lp(-1,29));
         LinearLayout toolbar=row(0xffa7a7a7);HorizontalScrollView toolbarScroll=horizontalScroll();toolbarScroll.addView(toolbar);root.addView(toolbarScroll,lp(-1,36));
@@ -245,13 +245,17 @@ public final class MainActivity extends Activity {
             explorer.addView(text("Документы и накопители\nчерез проводник Android",10,0xff474747),lp(-1,-2));
         }else{
             LinearLayout palette=column(0xffa6a6a6);palette.setPadding(dp(7),dp(4),dp(7),0);ScrollView scroll=new ScrollView(this);scroll.addView(palette);libraryContent.addView(scroll);
-            String[] names=selectedTab==2?new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}:selectedTab==3?new String[]{"Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation","Reset effects"}:new String[]{"Solid Color","Titles & Text","Checkerboard","Color Gradient"};
+            String[] names=selectedTab==2?new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}:selectedTab==3?new String[]{"Визуальные эффекты","Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation","Reset effects"}:new String[]{"Solid Color","Titles & Text","Checkerboard","Color Gradient"};
             final int section=selectedTab;
             for(int i=0;i<names.length;i++){final int index=i;TextView t=text(names[i]+"  ▸",11,TEXT);t.setContentDescription(names[i]);t.setBackground(border(0xffb4b4b4));t.setPadding(dp(5),0,dp(5),0);palette.addView(t,lp(-1,40));t.setOnClickListener(v->paletteAction(section,index));}
             palette.addView(text(section==2?"Появление и исчезновение\nвыделенного фрагмента.":section==3?"Эффекты видны в Preview\nи сохраняются в MP4.":"Создать самостоятельный клип.\nТитры поверх видео: кнопка Text.",10,0xff383838),lp(-1,-2));
         }
     }
     private void showMenu(View anchor,String name){
+        if ("Эффекты".equals(name)) {
+            effectDialog("creative");
+            return;
+        }
         PopupMenu popup=new PopupMenu(this,anchor);Menu m=popup.getMenu();
         if(name.equals("File")){
             item(m,"New",!job.running,this::newProject);item(m,"Timeline editor…",!job.running,this::openSequence);item(m,"Open video…",!job.running,this::pickVideo);item(m,"Open project…",!job.running,this::pickProject);
@@ -274,7 +278,7 @@ public final class MainActivity extends Activity {
         }else if(name.equals("Options")){
             item(m,(looping?"✓ ":"")+"Loop playback",true,()->{looping=!looping;loopIcon.select(looping);});
             item(m,"Project volume…",prepared,this::volumeDialog);item(m,"Select loop region…",prepared&&!job.running,this::preciseRange);
-        }else{item(m,"Help",true,this::help);item(m,"About…",true,()->message("Sony Vegas Video 2.4","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
+        }else{item(m,"Help",true,this::help);item(m,"About…",true,()->message("Sony Vegas Video 2.5","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
         popup.show();
     }
     private void selectTab(int index){selectedTab=index;libraryVisible=true;libraryPane.setVisibility(View.VISIBLE);renderLibrary();}
@@ -287,7 +291,20 @@ public final class MainActivity extends Activity {
         if(!prepared){message("Откройте видео","Для эффекта сначала выберите File → Open video…");return;}
         EffectSpec next=effects.copy();next.masterGain=previewGain;
         if(section==2){next.transition=new String[]{"dissolve","cross","wipe","cascade"}[index];EffectDialogs.show(this,next,"transitions",this::applyEffects);}
-        else {String dialog="effects";if(index==2)next.chromaKey=true;else if(index==3)next.blur=3;else if(index==4)next.mosaic=24f;else if(index==5&&next.preset.equals("none"))next.preset="vivid";else if(index==6)dialog="animation";else if(index==7){resetEffects();return;}EffectDialogs.show(this,next,dialog,this::applyEffects);}
+        else {
+            String dialog = "effects";
+            switch (index) {
+                case 0: dialog = "creative"; break;
+                case 3: next.chromaKey = true; break;
+                case 4: next.blur = 3; break;
+                case 5: next.mosaic = 24f; break;
+                case 6: if (next.preset.equals("none")) next.preset = "vivid"; break;
+                case 7: dialog = "animation"; break;
+                case 8: resetEffects(); return;
+                default: break;
+            }
+            EffectDialogs.show(this,next,dialog,this::applyEffects);
+        }
     }
     private void generate(String kind){
         if(job.running)return;LinearLayout form=column(CHROME);form.setPadding(dp(16),dp(8),dp(16),dp(8));

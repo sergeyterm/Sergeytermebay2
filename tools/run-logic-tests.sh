@@ -6,7 +6,7 @@ mkdir -p "$OUT"
 BASE="$PROJECT/app/src/main/java/com/personal/sonyvegasvideo"
 SOURCES=("$BASE/ClipMath.java" "$BASE/EditHistory.java" "$BASE/Sequence.java" "$BASE/Mp4Duration.java")
 TESTS=(ClipMathTest WorkspaceLogicTest SequenceTest Mp4DurationTest)
-if [[ -f "$BASE/EffectSpec.java" ]]; then SOURCES+=("$BASE/EffectSpec.java"); fi
+if [[ -f "$BASE/EffectSpec.java" ]]; then SOURCES+=("$BASE/EffectSpec.java" "$BASE/VisualEffect.java"); fi
 if [[ -f "$PROJECT/tests/EffectSpecTest.java" ]]; then TESTS+=(EffectSpecTest); fi
 if [[ -f "$BASE/TransitionTiming.java" ]]; then SOURCES+=("$BASE/TransitionTiming.java"); fi
 if [[ -f "$PROJECT/tests/TransitionTimingTest.java" ]]; then TESTS+=(TransitionTimingTest); fi

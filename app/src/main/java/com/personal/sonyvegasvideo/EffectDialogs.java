@@ -54,6 +54,20 @@ public final class EffectDialogs {
             slider(activity,body,"audioGain","Громкость музыки, %",0,100,draft.audioGain*100,0,value->draft.audioGain=value/100);
             slider(activity,body,"masterGain","Общая громкость экспорта, %",0,100,draft.masterGain*100,0,value->draft.masterGain=value/100);
             slider(activity,body,"audioPan","Панорама: влево − / вправо +",-1,1,draft.audioPan,2,value->draft.audioPan=value);
+        }else if("creative".equals(section)){
+            title="Визуальные эффекты";
+            note(activity, body, "Эффект применяется к ролику или монтажному проекту. Его можно сочетать с цветокоррекцией и переходами.");
+            VisualEffect[] effects = VisualEffect.values();
+            String[] ids = new String[effects.length];
+            String[] labels = new String[effects.length];
+            for (int i = 0; i < effects.length; i++) {
+                ids[i] = effects[i].id;
+                labels[i] = effects[i].label;
+            }
+            choose(activity, body, "visualEffect", "Эффект", ids, labels,
+                    draft.visualEffect, value -> draft.visualEffect = value);
+            slider(activity, body, "visualStrength", "Сила эффекта, %",
+                    0, 100, draft.visualStrength * 100, 0, value -> draft.visualStrength = value / 100);
         }else if("animation".equals(section)){
             title="Анимация — два ключевых состояния";animation(activity,body,draft);
         }else{
@@ -90,6 +104,7 @@ public final class EffectDialogs {
         if("transitions".equals(section)||"sequenceTransitions".equals(section)){out.transition="none";out.transitionMs=defaults.transitionMs;}
         else if("title".equals(section)){out.title="";out.titleColor=defaults.titleColor;out.titleSize=defaults.titleSize;out.titleY=defaults.titleY;}
         else if("layers".equals(section)){out.overlayUri="";out.audioUri="";out.overlayScale=defaults.overlayScale;out.overlayX=defaults.overlayX;out.overlayY=defaults.overlayY;out.audioGain=defaults.audioGain;out.masterGain=1;}
+        else if("creative".equals(section)){out.visualEffect=defaults.visualEffect;out.visualStrength=defaults.visualStrength;}
         else {if(!"animation".equals(section)){out.brightness=0;out.contrast=0;out.saturation=1;out.hue=0;out.blur=0;out.mosaic=0;out.chromaKey=false;out.chromaColor=defaults.chromaColor;out.chromaThreshold=defaults.chromaThreshold;out.preset="none";}out.zoomStart=1;out.zoomEnd=1;out.rotationStart=0;out.rotationEnd=0;}
         return out.normalize();
     }

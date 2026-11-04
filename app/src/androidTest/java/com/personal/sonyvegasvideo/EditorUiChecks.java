@@ -90,6 +90,24 @@ final class EditorUiChecks {
         }
         s.clickText(main,"Transitions");for(String item:new String[]{"Dissolve","Cross Effect","Wipe","3D Cascade"}){s.clickDescription(main,item);check(s.hasText("Transitions — появление и исчезновение"),"Transition palette item does not open settings: "+item);s.windowClick("Отмена");}
         s.clickText(main,"Video FX");for(String item:new String[]{"Brightness and Contrast","Color Corrector","Chroma Keyer","Gaussian Blur","Mosaic","Color Filters","Zoom & Rotation"}){s.clickDescription(main,item);check(s.hasText(item.equals("Zoom & Rotation")?"Анимация — два ключевых состояния":"Video FX"),"Effect palette item does not open settings: "+item);s.windowClick("Отмена");}
+        s.clickDescription(main,"Визуальные эффекты");check(s.hasText("Визуальные эффекты"),"Video FX did not open the visual effects picker");s.windowClick("Отмена");
+        step("top Effects menu, adjustable visual effect and undo");
+        s.clickText(main, "Эффекты");
+        check(s.hasText("Визуальные эффекты"), "Top Effects button did not open the picker");
+        s.windowDescriptionClick("visualEffect");
+        s.windowClick("Волна");
+        s.setProgressField("visualStrength", 650);
+        s.windowClick("Применить");
+        ready(main);
+        EffectSpec creative = saveMain(saved).effects;
+        check(creative.visualEffect.equals("wave") && Math.abs(creative.visualStrength - 0.65f) < 0.001f,
+                "Effect selection or intensity was not saved");
+        s.clickDescription(main, "Отменить изменение");
+        ready(main);
+        check(saveMain(saved).effects.visualEffect.equals("none"), "Undo did not remove the visual effect");
+        s.clickDescription(main, "Повторить изменение");
+        ready(main);
+        check(saveMain(saved).effects.equals(creative), "Redo did not restore the visual effect and intensity");
         s.clickDescription(main,"Настройки эффектов");s.setProgressField("brightness",650);s.windowClick("Применить");ready(main);
         check(Math.abs(saveMain(saved).effects.brightness-.3f)<.015,"Effect slider Apply was not committed");
         s.clickDescription(main,"Отменить изменение");ready(main);check(Math.abs(saveMain(saved).effects.brightness)<.015,"Effect slider Undo did not restore its value");
@@ -138,6 +156,9 @@ final class EditorUiChecks {
         Instrumentation.ActivityMonitor sequenceMonitor=s.test.addMonitor(SequenceActivity.class.getName(),null,false);
         s.clickDescription(main,"Монтаж: разрезать, удалить и склеить");sequence=s.test.waitForMonitorWithTimeout(sequenceMonitor,15000);s.test.removeMonitor(sequenceMonitor);check(sequence!=null,"Timeline editor did not open");sequenceReady();
         for(String[] menu:new String[][]{{"File","New"},{"Edit","Split (S)"},{"View","Zoom in"},{"Insert","Video events…"},{"Tools","Video FX…"},{"Help","Editing help"}}){s.clickText(sequence,menu[0]);s.menuReady(menu[1]);check(s.hasText(menu[1]),"Missing sequence menu item "+menu[1]);s.back();}
+        s.clickText(sequence, "Эффекты");
+        check(s.hasText("Визуальные эффекты"), "Timeline editor Effects button did not open the picker");
+        s.windowClick("Отмена");
         SequenceTimeline timeline=s.main(()->NativeTestSupport.findClass(sequence.getWindow().getDecorView(),SequenceTimeline.class));check(timeline!=null,"Missing sequence timeline");
         s.main(()->{Bundle args=new Bundle();args.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,900);check(timeline.performAccessibilityAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(),args),"Accessible exact seek not supported");return null;});
         s.clickDescription(sequence,"Разрезать в позиции курсора (S)");s.await(()->eventCount()==2,10000,"Exact split did not create two events");

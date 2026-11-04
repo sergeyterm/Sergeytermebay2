@@ -50,6 +50,19 @@ final class EditedExportChecks {
         Uri mono=render(one(red,0,1000),monochrome,true);Bitmap monoFrame=frame(mono,500_000);
         double[] monoColor=rgb(monoFrame,.5,.5);check(Math.max(monoColor[0],Math.max(monoColor[1],monoColor[2]))-Math.min(monoColor[0],Math.min(monoColor[1],monoColor[2]))<.1,"Monochrome output remains colored");monoFrame.recycle();
 
+        step("visual effect changes actual MP4 pixels with adjustable strength");
+        EffectSpec vignette = new EffectSpec();
+        vignette.visualEffect = "vignette";
+        vignette.visualStrength = 0.65f;
+        Uri vignetteOutput = render(one(red, 0, 750), vignette, true);
+        Bitmap vignetteFrame = frame(vignetteOutput, 350_000);
+        double centerRed = rgb(vignetteFrame, 0.5, 0.5)[0];
+        double edgeRed = rgb(vignetteFrame, 0.04, 0.04)[0];
+        check(centerRed > 0.85 && edgeRed < centerRed - 0.19 && edgeRed > 0.25,
+                "Vignette did not darken the corners at partial strength: " + centerRed + ", " + edgeRed);
+        saveFrame(vignetteFrame, "effect-visual-vignette.png");
+        vignetteFrame.recycle();
+
         step("blur and mosaic alter spatial detail");
         EffectSpec smooth=new EffectSpec();smooth.blur=12;smooth.mosaic=70;
         Uri smoothed=render(one(source,137,1137),smooth,true);Bitmap smoothFrame=frame(smoothed,500_000);

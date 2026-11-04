@@ -10,6 +10,8 @@ public final class EffectSpec implements Cloneable {
     public int chromaColor=0xff00ff00;
     public float chromaThreshold=.25f;
     public String preset="none", transition="none";
+    public String visualEffect = "none";
+    public float visualStrength = 0.75f;
     public int transitionMs=600;
     public String title="";
     public int titleColor=0xffffffff;
@@ -29,6 +31,8 @@ public final class EffectSpec implements Cloneable {
         videoOpacity=limit(videoOpacity,0,1,1);audioPan=limit(audioPan,-1,1,0);
         chromaThreshold=limit(chromaThreshold,.03f,.8f,.25f);chromaColor|=0xff000000;
         preset=choice(preset,new String[]{"none","mono","sepia","vivid","cool","warm","invert","vintage"});
+        visualEffect = VisualEffect.fromId(visualEffect).id;
+        visualStrength = limit(visualStrength, 0, 1, 0.75f);
         transition=choice(transition,new String[]{"none","dissolve","cross","wipe","cascade"});
         transitionMs=Math.max(50,Math.min(5000,transitionMs));
         title=title==null?"":title;if(title.length()>200)title=title.substring(0,200);
@@ -43,10 +47,12 @@ public final class EffectSpec implements Cloneable {
     private static String boundedUri(String value){return value==null||value.length()>8192?"":value;}
     private static String choice(String value,String[] allowed){for(String item:allowed)if(item.equals(value))return item;return "none";}
     private static float limit(float v,float low,float high,float fallback){return Float.isFinite(v)?Math.max(low,Math.min(high,v)):fallback;}
-    public boolean isIdentity(){EffectSpec s=copy().normalize();return s.brightness==0&&s.contrast==0&&s.saturation==1&&s.hue==0&&s.blur==0&&s.mosaic==0&&s.videoOpacity==1&&s.audioPan==0&&!s.chromaKey&&s.preset.equals("none")&&s.transition.equals("none")&&s.title.isEmpty()&&s.masterGain==1&&s.audioUri.isEmpty()&&s.overlayUri.isEmpty()&&s.zoomStart==1&&s.zoomEnd==1&&s.rotationStart==0&&s.rotationEnd==0;}
+    public boolean isIdentity(){EffectSpec s=copy().normalize();return s.brightness==0&&s.contrast==0&&s.saturation==1&&s.hue==0&&s.blur==0&&s.mosaic==0&&s.videoOpacity==1&&s.audioPan==0&&!s.chromaKey&&s.preset.equals("none")&&s.transition.equals("none")&&s.title.isEmpty()&&s.masterGain==1&&s.audioUri.isEmpty()&&s.overlayUri.isEmpty()&&s.zoomStart==1&&s.zoomEnd==1&&s.rotationStart==0&&s.rotationEnd==0&&(s.visualStrength==0||s.visualEffect.equals("none"));}
     @Override public boolean equals(Object value){
         if(this==value)return true;if(!(value instanceof EffectSpec))return false;EffectSpec s=(EffectSpec)value;
+        if (!Objects.equals(visualEffect, s.visualEffect)
+                || Float.compare(visualStrength, s.visualStrength) != 0) return false;
         return Float.compare(brightness,s.brightness)==0&&Float.compare(contrast,s.contrast)==0&&Float.compare(saturation,s.saturation)==0&&Float.compare(hue,s.hue)==0&&Float.compare(blur,s.blur)==0&&Float.compare(mosaic,s.mosaic)==0&&Float.compare(videoOpacity,s.videoOpacity)==0&&Float.compare(audioPan,s.audioPan)==0&&chromaKey==s.chromaKey&&chromaColor==s.chromaColor&&Float.compare(chromaThreshold,s.chromaThreshold)==0&&Objects.equals(preset,s.preset)&&Objects.equals(transition,s.transition)&&transitionMs==s.transitionMs&&Objects.equals(title,s.title)&&titleColor==s.titleColor&&Float.compare(titleSize,s.titleSize)==0&&Float.compare(titleY,s.titleY)==0&&Float.compare(masterGain,s.masterGain)==0&&Objects.equals(audioUri,s.audioUri)&&Float.compare(audioGain,s.audioGain)==0&&Objects.equals(overlayUri,s.overlayUri)&&Float.compare(overlayScale,s.overlayScale)==0&&Float.compare(overlayX,s.overlayX)==0&&Float.compare(overlayY,s.overlayY)==0&&Float.compare(zoomStart,s.zoomStart)==0&&Float.compare(zoomEnd,s.zoomEnd)==0&&Float.compare(rotationStart,s.rotationStart)==0&&Float.compare(rotationEnd,s.rotationEnd)==0;
     }
-    @Override public int hashCode(){return Objects.hash(brightness,contrast,saturation,hue,blur,mosaic,chromaKey,chromaColor,chromaThreshold,preset,transition,transitionMs,title,titleColor,titleSize,titleY,masterGain,audioUri,audioGain,overlayUri,overlayScale,overlayX,overlayY,zoomStart,zoomEnd,rotationStart,rotationEnd,videoOpacity,audioPan);}
+    @Override public int hashCode(){return Objects.hash(brightness,contrast,saturation,hue,blur,mosaic,chromaKey,chromaColor,chromaThreshold,preset,transition,transitionMs,title,titleColor,titleSize,titleY,masterGain,audioUri,audioGain,overlayUri,overlayScale,overlayX,overlayY,zoomStart,zoomEnd,rotationStart,rotationEnd,videoOpacity,audioPan,visualEffect,visualStrength);}
 }

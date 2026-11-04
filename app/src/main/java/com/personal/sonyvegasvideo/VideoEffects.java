@@ -51,6 +51,10 @@ public final class VideoEffects {
         }
         if(s.mosaic>0||s.chromaKey||s.videoOpacity!=1){EffectSpec pixels=s.copy();pixels.transition="none";effects.add(new FrameEffect(pixels,durationUs,originUs));}
         if(s.blur>.01f)effects.add(new GaussianBlur(s.blur));
+        VisualEffect visualEffect = VisualEffect.fromId(s.visualEffect);
+        if (visualEffect != VisualEffect.NONE && s.visualStrength > 0) {
+            effects.add(new CreativeVideoEffect(visualEffect, s.visualStrength, originUs));
+        }
         if(s.zoomStart!=1||s.zoomEnd!=1||s.rotationStart!=0||s.rotationEnd!=0){
             effects.add((MatrixTransformation)time->{
                 float t=progress(time,durationUs,originUs);float zoom=s.zoomStart+(s.zoomEnd-s.zoomStart)*t;

@@ -85,6 +85,7 @@ public final class EditorPreview extends FrameLayout {
         if(effectStart==start&&effectEnd==end)return;
         effectStart=start;effectEnd=end;
         boolean temporal=!settings.transition.equals("none")||settings.zoomStart!=settings.zoomEnd||settings.rotationStart!=settings.rotationEnd;
+        temporal |= settings.visualStrength > 0 && VisualEffect.fromId(settings.visualEffect).usesTime();
         if(source==null||!temporal)return;
         int position=getCurrentPosition();boolean play=isPlaying();pendingPosition=position;wantPlay=play;reload();
     }
