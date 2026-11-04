@@ -5,9 +5,10 @@ PACKAGE=com.personal.sonyvegasvideo
 RUNNER="$PACKAGE.test/$PACKAGE.ExportInstrumentation"
 OUT="$PROJECT/build/device-test-results"
 mkdir -p "$OUT/screenshots" "$OUT/diagnostics"
-APP="${VEGAS_APP_APK:-$PROJECT/build/sdk/Sony_Vegas_Video_v2.6.apk}"
+VERSION="$(awk -F"'" '$1 ~ /^[[:space:]]*versionName[[:space:]]*$/ { print $2; exit }' "$PROJECT/app/build.gradle")"
+APP="${VEGAS_APP_APK:-$PROJECT/build/sdk/Sony_Vegas_Video_v$VERSION.apk}"
 TEST="${VEGAS_TEST_APK:-$PROJECT/build/device-tests/VegasVideo_device_tests.apk}"
-[[ -f "$APP" && -f "$TEST" ]] || { echo 'Build/download both APKs first.' >&2; exit 1; }
+[[ -f "$APP" && -f "$TEST" ]] || { printf 'Build/download both APKs first.\nApp: %s\nTests: %s\n' "$APP" "$TEST" >&2; exit 1; }
 adb wait-for-device
 adb install -r "$APP"
 adb install -r -t "$TEST"
