@@ -139,7 +139,7 @@ public final class SequenceActivity extends Activity {
             return insets;
         });
         setContentView(root);
-        TextView title=text("Sony Vegas Video — Timeline Editor",16);
+        TextView title=text("Sony Vegas — Timeline Editor",16);
         EditorStyle.heading(title);
         title.setPadding(dp(12),0,dp(12),0);
         root.addView(title,lp(-1,40));

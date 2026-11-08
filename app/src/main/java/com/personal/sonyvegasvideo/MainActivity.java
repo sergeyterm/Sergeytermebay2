@@ -125,7 +125,7 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         LinearLayout root=column(CHROME);root.setOnApplyWindowInsetsListener((v,insets)->{root.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
         setContentView(root);
-        windowTitle=text("Untitled — Sony Vegas Video",16,TEXT);
+        windowTitle=text("Untitled — Sony Vegas",16,TEXT);
         EditorStyle.heading(windowTitle);
         windowTitle.setPadding(dp(12),0,dp(12),0);
         root.addView(windowTitle,lp(-1,40));
@@ -329,7 +329,7 @@ public final class MainActivity extends Activity {
         }else if(name.equals("Options")){
             item(m,"loop",(looping?"✓ ":"")+"Loop playback",true,()->{looping=!looping;loopIcon.select(looping);});
             item(m,"volume","Project volume…",prepared,this::volumeDialog);item(m,"range","Select loop region…",prepared&&!job.running,this::preciseRange);
-        }else{item(m,"help","Help",true,this::help);item(m,"info","About…",true,()->message("Sony Vegas Video 2.7","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
+        }else{item(m,"help","Help",true,this::help);item(m,"info","About…",true,()->message("Sony Vegas 2.7.1","Личный Android-видеоредактор.\nКлассическая компоновка Sony Vegas Pro 13.\nВидеоэффекты, титры, переходы, слои и монтаж.\n\nНеофициальное приложение; не продукт Sony/VEGAS."));}
         popup.show();
     }
     private void selectTab(int index){selectedTab=index;libraryVisible=true;libraryPane.setVisibility(View.VISIBLE);renderLibrary();}
@@ -432,7 +432,7 @@ public final class MainActivity extends Activity {
         setStatus("Загрузка медиа…");try{preview.setVideoURI(uri,effects,muted);preview.seekTo(restorePosition);}catch(RuntimeException e){setStatus("Не удалось открыть файл: "+e.getMessage());}
         probe.load(this,uri,info->{
             if(!uri.equals(videoUri)||isDestroyed())return;mediaInfo=info;if(info.name!=null)mediaName=info.name;
-            windowTitle.setText(mediaName+" — Sony Vegas Video");sourceLabel.setText(mediaName);
+            windowTitle.setText(mediaName+" — Sony Vegas");sourceLabel.setText(mediaName);
             previewMeta.setText("Project: "+info.width+" × "+info.height+(info.fps>0?" · "+info.fps+" fps":"")+"\nPreview: Auto · "+info.codec+(info.hasAudio?" / "+info.audioCodec:""));
             timeline.media(durationMs,mediaName,info.hasAudio,info.frames,info.peaks);updateSelection();renderLibrary();updateEnabled();
         });
@@ -448,7 +448,7 @@ public final class MainActivity extends Activity {
         if(!job.running)setStatus(prepared?"Готово. Выделение: золотые ручки; Render As… — экспорт MP4.":"Длительность видео недоступна.");
     }
     private void setRange(int start,int end){if(!prepared||job.running)return;beginMs=ClipMath.clamp(start,0,durationMs-1);endMs=ClipMath.clamp(end,beginMs+1,durationMs);restoreEnd=endMs;updateSelection();handler.removeCallbacks(rangePreview);handler.postDelayed(rangePreview,180);}
-    private void updateSelection(){if(timeline==null)return;if(videoUri!=null)windowTitle.setText(mediaName+((beginMs>0||endMs<durationMs||muted||!effects.isIdentity()||!markers.isEmpty())?" *":"")+" — Sony Vegas Video");timeline.selection(beginMs,endMs,muted);timeline.levels(effects.videoOpacity,previewGain,effects.audioPan);selectionLabel.setText("Loop: "+ClipMath.clockCode(beginMs)+" — "+ClipMath.clockCode(endMs)+"    Length: "+ClipMath.clockCode(Math.max(0,endMs-beginMs)));muteIcon.select(muted);}
+    private void updateSelection(){if(timeline==null)return;if(videoUri!=null)windowTitle.setText(mediaName+((beginMs>0||endMs<durationMs||muted||!effects.isIdentity()||!markers.isEmpty())?" *":"")+" — Sony Vegas");timeline.selection(beginMs,endMs,muted);timeline.levels(effects.videoOpacity,previewGain,effects.audioPan);selectionLabel.setText("Loop: "+ClipMath.clockCode(beginMs)+" — "+ClipMath.clockCode(endMs)+"    Length: "+ClipMath.clockCode(Math.max(0,endMs-beginMs)));muteIcon.select(muted);}
     private void togglePreview(){if(!prepared||job.running)return;if(preview.isPlaying())preview.pause();else{int p=preview.getCurrentPosition();if(p<beginMs||p>=endMs)seekPlayer(beginMs);preview.start();applyRate();}}
     private void seek(int position){if(!prepared||job.running)return;preview.pause();restorePosition=ClipMath.clamp(position,0,durationMs);seekPlayer(restorePosition);timeline.position(restorePosition);playIcon.select(false);}
     private void seekPlayer(int position){if(currentPlayer!=null)try{currentPlayer.seekTo((long)position,MediaPlayer.SEEK_CLOSEST);return;}catch(IllegalStateException ignored){}preview.seekTo(position);}
@@ -493,7 +493,7 @@ public final class MainActivity extends Activity {
         if(timeline!=null)timeline.setEnabled(ready);if(cancelIcon!=null)cancelIcon.setEnabled(job.running);
     }
     private void openResult(boolean share){if(lastExport==null)return;Intent i=new Intent(share?Intent.ACTION_SEND:Intent.ACTION_VIEW);if(share){i.setType("video/mp4");i.putExtra(Intent.EXTRA_STREAM,lastExport);}else i.setDataAndType(lastExport,"video/mp4");i.setClipData(android.content.ClipData.newRawUri("Vegas Video",lastExport));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{startActivity(share?Intent.createChooser(i,"Поделиться видео"):i);}catch(ActivityNotFoundException|SecurityException e){setStatus("Не удалось открыть результат. Проверьте файл в Галерее.");}}
-    private void newProject(){if(job.running)return;rememberProject();sourceGeneration++;probe.cancel();preview.stopPlayback();videoUri=null;currentPlayer=null;prepared=false;persistedGrant=false;durationMs=beginMs=endMs=restorePosition=0;restoreEnd=-1;mediaInfo=null;mediaName="Untitled";muted=false;effects=new EffectSpec();previewGain=playbackRate=1;history.clear();markers.clear();timeline.markers(markers);timeline.media(0,"",false,null,null);timeline.position(0);placeholder.setText("Video Preview\n\nОткройте видео");placeholder.setVisibility(View.VISIBLE);windowTitle.setText("Untitled — Sony Vegas Video");sourceLabel.setText("Project Media");previewMeta.setText("Project: —\nPreview: —");updateVolume();updateSelection();renderLibrary();updateEnabled();savePreferences();setStatus("Новый проект. File → Open video… Предыдущий проект: File → Restore previous project.");}
+    private void newProject(){if(job.running)return;rememberProject();sourceGeneration++;probe.cancel();preview.stopPlayback();videoUri=null;currentPlayer=null;prepared=false;persistedGrant=false;durationMs=beginMs=endMs=restorePosition=0;restoreEnd=-1;mediaInfo=null;mediaName="Untitled";muted=false;effects=new EffectSpec();previewGain=playbackRate=1;history.clear();markers.clear();timeline.markers(markers);timeline.media(0,"",false,null,null);timeline.position(0);placeholder.setText("Video Preview\n\nОткройте видео");placeholder.setVisibility(View.VISIBLE);windowTitle.setText("Untitled — Sony Vegas");sourceLabel.setText("Project Media");previewMeta.setText("Project: —\nPreview: —");updateVolume();updateSelection();renderLibrary();updateEnabled();savePreferences();setStatus("Новый проект. File → Open video… Предыдущий проект: File → Restore previous project.");}
     private void saveLocalProject(){capture();savePreferences();setStatus(persistedGrant?"Проект сохранён. File → Save project as… — сохранить отдельный .vvp.":"Настройки сохранены. Для доступа после перезапуска выберите файл через проводник с постоянным доступом.");}
     private String projectJson()throws Exception{if(videoUri==null||endMs<=beginMs)throw new java.io.IOException("Сначала откройте видео.");ProjectCodec.Project p=new ProjectCodec.Project();p.single=true;p.sequence=p.sequence.append(new Sequence.Clip(videoUri.toString(),mediaName,beginMs,endMs));p.effects=effects.copy();p.effects.masterGain=previewGain;p.muted=muted;p.cursor=ClipMath.clamp(preview.getCurrentPosition()-beginMs,0,endMs-beginMs);p.markers=new ArrayList<>(markers);return ProjectCodec.write(p);}
     private void rememberProject(){if(videoUri==null||!prepared)return;try{preferences.edit().putString("previousProject",projectJson()).apply();}catch(Exception ignored){}}
