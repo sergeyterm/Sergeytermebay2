@@ -21,10 +21,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Install Android command-line SDK
-        uses: android-actions/setup-android@v3
-      - name: Install API 35 platform and tools
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Ensure Android SDK Platform 35
+        run: |
+          test -n "${ANDROID_HOME:-}"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
       - name: Setup Gradle 8.10.2
         uses: gradle/actions/setup-gradle@v4
         with:
