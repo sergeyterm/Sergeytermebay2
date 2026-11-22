@@ -811,7 +811,7 @@ public final class MainActivity extends Activity {
     }
     private Button button(String text, int background, int foreground) {
         Button b = new Button(this);
-        b.setText(text); b.setTextAllCaps(false); b.setTextSize(14);
+        b.setText(text); b.setAllCaps(false); b.setTextSize(14);
         b.setTextColor(foreground); b.setTypeface(null, Typeface.BOLD);
         b.setMinHeight(dp(48));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(60, 255, 255, 255)),
