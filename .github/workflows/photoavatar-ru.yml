@@ -74,19 +74,24 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          target: google_apis
+          target: aosp_atd
           arch: x86_64
           profile: pixel_6
           disable-animations: true
           script: |
+            set -euo pipefail
             test -f smoke-apk/app-debug.apk
             adb install -r smoke-apk/app-debug.apk
             adb logcat -c
+            sleep 6
             adb shell am start -W -n ru.photoavatarru.app/.MainActivity | tee launch.txt
             grep -q 'Status: ok' launch.txt
-            sleep 4
+            sleep 5
             adb shell pidof ru.photoavatarru.app | tee pid.txt
             test -s pid.txt
+            adb shell uiautomator dump /sdcard/window.xml
+            adb pull /sdcard/window.xml window.xml
+            grep -q 'Разговор лицом к лицу' window.xml
             adb exec-out screencap -p > app-launch.png
             adb logcat -d -b crash -v brief > crash-log.txt
             if grep -E 'FATAL EXCEPTION|Process: ru.photoavatarru.app' crash-log.txt; then exit 1; fi
@@ -100,5 +105,6 @@ jobs:
             pid.txt
             app-launch.png
             crash-log.txt
+            window.xml
           if-no-files-found: warn
           retention-days: 14
