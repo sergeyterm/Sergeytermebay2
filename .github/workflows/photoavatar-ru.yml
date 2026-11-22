@@ -50,3 +50,55 @@ jobs:
           path: photoavatar-ru-android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
           if-no-files-found: warn
+
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Download built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: PhotoAvatarRU-Android-1.2.0-debug
+          path: smoke-apk
+      - name: Enable KVM for Android Emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Boot Android 35 and launch PhotoAvatar RU
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            test -f smoke-apk/app-debug.apk
+            adb install -r smoke-apk/app-debug.apk
+            adb logcat -c
+            adb shell am start -W -n ru.photoavatarru.app/.MainActivity | tee launch.txt
+            grep -q 'Status: ok' launch.txt
+            sleep 4
+            adb shell pidof ru.photoavatarru.app | tee pid.txt
+            test -s pid.txt
+            adb exec-out screencap -p > app-launch.png
+            adb logcat -d -b crash -v brief > crash-log.txt
+            if grep -E 'FATAL EXCEPTION|Process: ru.photoavatarru.app' crash-log.txt; then exit 1; fi
+      - name: Upload Android startup evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoAvatarRU-Android-Emulator-API35-smoke
+          path: |
+            launch.txt
+            pid.txt
+            app-launch.png
+            crash-log.txt
+          if-no-files-found: warn
+          retention-days: 14
