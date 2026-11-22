@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#091b22">
+<style>
+:root{color-scheme:dark} *{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#091b22;color:#fff;font-family:Roboto,system-ui,sans-serif}
+#agent-container{width:100%;height:100%;min-height:100%;overflow:hidden}
+#agent-status{position:fixed;top:12px;left:15%;right:15%;z-index:5;padding:6px 12px;border-radius:30px;background:rgba(11,28,33,.82);text-align:center;font-size:12px;color:#cbe0db;pointer-events:none}
+</style></head><body>
+<div id="agent-status" role="status">Подключение к собеседнику…</div>
+<div id="agent-container"></div>
+<script type="module" src="https://agent.d-id.com/v2/index.js"
+ data-name="did-agent" data-mode="full" data-target-id="agent-container"
+ data-agent-id="__AGENT_ID__" data-client-key="__CLIENT_KEY__"
+ data-orientation="vertical" data-open-mode="expanded" data-auto-connect="true"
+ data-show-agent-name="false" data-show-restart-button="false"
+ data-speech-silence-timeout-ms="750"></script>
+<script>
+window.__avatarConnectionState='starting';
+(function(){
+  let done=false;
+  let count=0;
+  const timer=setInterval(function(){
+    const api=window.DID_AGENTS_API;
+    if(!api){if(++count>225){clearInterval(timer);document.getElementById('agent-status').textContent='Не удалось загрузить видеосвязь. Проверьте интернет.';window.__avatarConnectionState='fail';}return;}
+    if(done)return;done=true;clearInterval(timer);
+    try {
+      api.configure({showChatToggle:true,showMicToggle:false,showRestartButton:false});
+      api.events.on('connection',function(e){
+        const st=e && e.state || 'unknown';
+        window.__avatarConnectionState=st;
+        const labels={new:'Готов к вызову',connecting:'Соединяем…',connected:'На связи',disconnected:'Связь прервана',disconnecting:'Завершение…',closed:'Звонок завершён',fail:'Ошибка соединения',completed:'Разговор завершён'};
+        document.getElementById('agent-status').textContent=labels[st]||'Состояние: '+st;
+      });
+      api.events.on('error',function(e){window.__avatarConnectionState='fail';document.getElementById('agent-status').textContent='Ошибка видеосвязи — проверьте настройки и тариф';});
+    } catch(e){document.getElementById('agent-status').textContent='Ошибка настройки видеосвязи';window.__avatarConnectionState='fail';}
+  },200);
+})();
+</script>
+</body></html>
