@@ -134,6 +134,12 @@ final class RunwayApi {
             .put("roomName",creds.optString("roomName",""));
     }
 
+    /** Stop remote processing after hangup; no new paid session is created. */
+    void cancelSession(String sessionId) throws Exception {
+        if (!isUuid(sessionId)) throw new IOException("Неверный ID сеанса");
+        request("DELETE", "/v1/realtime_sessions/" + sessionId, null, apiKey);
+    }
+
     private static boolean isUuid(String s) {
         return s != null && s.matches("(?i)[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
     }
