@@ -140,12 +140,26 @@ jobs:
             sleep 5
             adb shell pidof ru.photoavatarru.app | tee pid.txt
             test -s pid.txt
-            adb shell uiautomator dump /sdcard/window.xml
-            adb pull /sdcard/window.xml window.xml
-            grep -q 'Звонок с ожившим портретом' window.xml
+            adb shell dumpsys webviewupdate > webview-provider.txt
+            # Wait for the embedded Chromium page to paint, not merely for Activity launch.
+            found=0
+            n=0
+            while [ "$n" -lt 6 ]; do
+              n=$((n + 1))
+              adb shell uiautomator dump /sdcard/window.xml || true
+              adb pull /sdcard/window.xml window.xml || true
+              if grep -q 'Звонок с ожившим портретом' window.xml; then found=1; break; fi
+              sleep 4
+            done
             adb exec-out screencap -p > app-launch.png
+            adb logcat -d -v brief > full-logcat.txt
             adb logcat -d -b crash -v brief > crash-log.txt
             if grep -E 'FATAL EXCEPTION|Process: ru.photoavatarru.app' crash-log.txt; then exit 1; fi
+            if [ "$found" -ne 1 ]; then
+              echo "WebView content did not become accessible after 24 seconds" >&2
+              grep -iE 'chromium|webview|crash|error|appassets|photoavatar' full-logcat.txt | tail -n 120 || true
+              exit 1
+            fi
       - name: Upload Android startup evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -157,5 +171,7 @@ jobs:
             app-launch.png
             crash-log.txt
             window.xml
+            full-logcat.txt
+            webview-provider.txt
           if-no-files-found: warn
           retention-days: 14
