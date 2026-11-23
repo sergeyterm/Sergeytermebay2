@@ -71,7 +71,7 @@ class RunwayContracts(unittest.TestCase):
         data=(ROOT/'app/build.gradle').read_text()
         self.assertRegex(data,r'compileSdk\s+35')
         self.assertRegex(data,r'minSdk\s+26')
-        self.assertIn("versionName '1.3.0'",data)
+        self.assertIn("versionName '1.3.1'",data)
 
 if __name__=='__main__':
     unittest.main()
