@@ -114,7 +114,14 @@
 .call-state-line{display:flex;gap:6px;align-items:center;min-width:0}
 #callState{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .call-time{flex-shrink:0;margin-left:0}
-  </style>
+  
+/* Messenger-style inactive call: blurred portrait, not a Runway logo or stretched icon. */
+.call-backdrop{position:absolute;inset:-8%;z-index:0;background-color:#17232b;background-image:linear-gradient(160deg,#31434b,#0b141a);background-size:cover;background-position:center;filter:blur(17px) brightness(.55);transform:scale(1.055);pointer-events:none}
+.call-backdrop.with-image{background-color:#263941}
+#avatarVideo{position:absolute;inset:0;z-index:1;background:transparent!important;opacity:0;transition:opacity .35s ease}
+#avatarVideo.playing{opacity:1}
+.video-surface:after{z-index:2}
+</style>
 </head>
 <body>
   <section class="setup" id="setup">
@@ -197,7 +204,7 @@
 
   <section class="call" id="callScreen" role="dialog" aria-label="Видеозвонок с фотоаватаром">
     <div class="video-surface">
-      <div class="video-placeholder" aria-hidden="true"><span>PHOTOAVATAR RU · ВИДЕОСВЯЗЬ</span></div>
+      <div id="callBackdrop" class="call-backdrop" aria-hidden="true"></div>
       <video id="avatarVideo" autoplay muted playsinline></video>
       <audio id="avatarAudio" autoplay></audio>
     </div>
