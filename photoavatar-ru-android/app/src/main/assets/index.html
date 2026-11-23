@@ -54,6 +54,58 @@
     .ctrl-labels{display:grid;grid-template-columns:repeat(3,61px);justify-content:center;gap:15px;margin:8px 0 0;font-size:11px;text-align:center;color:#d1e5e7}
     .transcript{max-height:98px;overflow:auto;color:#b2d0d2;font-size:12px;margin:0 auto 12px;max-width:500px;text-shadow:0 1px 2px #000b}
     @media(min-width:690px){.call.active{inset:0;max-width:100%}.setup{padding-top:33px}.tile-grid button canvas{height:124px}}
+  
+/* Full-screen call view, visually aligned with familiar Android messenger video calls. */
+.call.active{display:flex;isolation:isolate;background:#0b141a;color:#f5f8f9}
+.video-surface{inset:0;background:#0b141a}
+#avatarVideo{z-index:0;overflow:hidden}
+#avatarVideo video{object-fit:cover!important;width:100%;height:100%;background:#0b141a}
+.video-placeholder{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 35%,#27444b,#101d25 70%,#0b141a)}
+.video-placeholder span{color:#a8bcc3;font-size:12px;letter-spacing:.8px;text-align:center;padding:25px}
+.video-surface:after{z-index:1;background:linear-gradient(180deg,#071319bd 0%,#091a2300 28%,#091a2300 58%,#07121bbf 100%)}
+.call-topbar{position:relative;z-index:8;display:flex;align-items:center;gap:13px;padding:17px 17px 12px;min-height:84px;pointer-events:auto}
+.call-icon-btn{border:0;background:#15262b99;color:#f3f7f8;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;padding:10px}
+.call-icon-btn svg{width:22px;height:22px;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.9;fill:none}
+.call-identity{flex:1;min-width:0;display:flex;align-items:center;gap:11px}
+.call-profile{width:45px;height:45px;border-radius:50%;border:1px solid #a5bbc466}
+.call-contact-name{font-size:19px;font-weight:720;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 3px #0009}
+.call-state-line{font-size:12px;color:#e1ebee;line-height:1.4;text-shadow:0 1px 3px #0008}
+.call-time{font-variant-numeric:tabular-nums;font-size:12px;color:#c0d9dc;margin-left:4px}
+.call-selffeed{position:absolute;z-index:9;top:93px;right:16px;width:114px;height:153px;border:2px solid #ffffff54;border-radius:16px;overflow:hidden;background:linear-gradient(155deg,#2e454b,#182932);box-shadow:0 5px 24px #0007}
+.call-selffeed video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.call-self-placeholder{height:100%;width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:7px;color:#e0ebed;text-align:center;font-size:12px}
+.call-self-placeholder svg{width:30px;height:30px;opacity:.65;stroke:currentColor;stroke-width:1.8;fill:none}
+.call-flip{position:absolute;right:5px;top:5px;padding:5px;display:grid;place-items:center;color:white;background:#0b141aaa;border:1px solid #ffffff52;border-radius:50%;height:32px;width:32px}
+.call-flip svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.call-center{position:absolute;z-index:7;inset:28% 10% 27%;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.connecting{background:#111f2de9;border:1px solid #ffffff24;box-shadow:0 12px 45px #0008;padding:21px 25px;border-radius:25px;max-width:285px;backdrop-filter:blur(12px)}
+.connecting strong{font-size:17px}
+.connecting span{font-size:13px;color:#c6d7dd}
+.pulse{background:#1b514a;color:#e3fff4;box-shadow:0 0 0 10px #46a28c16}
+.call-bottom{position:relative;z-index:9;margin-top:auto;padding:6px 12px max(23px,env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,#0b141abd 35%,#0b141af0);backdrop-filter:none}
+.call-controls{max-width:500px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px 12px;background:#202c33ec;border-radius:25px;box-shadow:0 5px 30px #0005}
+.call-control{position:relative;justify-self:center;width:54px;height:54px;border:0;border-radius:50%;color:#f6f7f8;background:#3b4c55;display:grid;place-items:center;transition:background .16s,transform .16s}
+.call-control:active{transform:scale(.94)}
+.call-control svg{width:25px;height:25px;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.9;fill:none}
+.call-control.off{background:#5a6369;color:#fff}
+.call-control.off:after{content:"";position:absolute;left:27px;top:12px;height:30px;width:2px;background:#fff;transform:rotate(-44deg);border-radius:2px;box-shadow:0 0 0 2px #5a6369}
+.call-control.end{background:#ec4058}
+.call-control.end svg{fill:currentColor;stroke-width:1}
+.call-control-labels{max-width:500px;margin:6px auto 0;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;color:#e0e8e9;font-size:10px;letter-spacing:.1px}
+.call-transcript{max-height:91px;overflow:auto;margin:0 auto 14px;color:#edf4f6;max-width:500px;font-size:12px;text-shadow:0 1px 3px #000;border-radius:10px;padding:0 7px}
+.call-transcript:empty{display:none}
+.call-footer{font-size:10px;text-align:center;color:#b3c1c4;margin-top:12px;opacity:.85}
+.call-error{pointer-events:auto;max-width:360px;width:min(90vw,360px);background:#17262ceE;border:1px solid #f59ba65b;padding:22px 20px;border-radius:20px;box-shadow:0 12px 45px #0008;backdrop-filter:blur(12px)}
+.call-error strong{font-size:18px;display:block;margin:9px 0}
+.call-error p{font-size:13px;line-height:1.5;color:#fff;overflow-wrap:anywhere}
+.call-error small{display:block;color:#ffbfca;margin-bottom:12px}
+.call-error button{background:#e6f5f3;color:#102629;border:0;width:100%;border-radius:12px;font-weight:700;padding:12px;margin-top:10px}
+.call-error svg{width:36px;height:36px;stroke:#ffb0bb;fill:none;stroke-width:1.7}
+.call-diagnostics{position:absolute;z-index:12;left:12px;right:12px;top:90px;max-height:160px;overflow:auto;background:#16252cef;border:1px solid #ffffff38;color:#e5f2f2;font:11px/1.5 ui-monospace,monospace;padding:11px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.call-toast{position:absolute;z-index:13;bottom:185px;left:50%;transform:translateX(-50%);background:#27353af4;border-radius:14px;color:white;font-size:12px;padding:12px 16px;max-width:85%;box-shadow:0 4px 20px #0007}
+@media(min-width:700px){.call-selffeed{width:160px;height:204px;top:95px;right:24px}.call-topbar{padding-left:28px;padding-right:28px}.call-bottom{padding-bottom:22px}.call-control{width:60px;height:60px}}
+@media(max-height:640px){.call-topbar{min-height:65px;padding-top:8px}.call-selffeed{top:67px;width:97px;height:115px}.call-bottom{padding-bottom:8px}.call-footer{display:none}.call-center{top:19%;bottom:19%}}
+
   </style>
 </head>
 <body>
@@ -130,22 +182,59 @@
     </div>
   </section>
 
-  <section class="call" id="callScreen">
-    <div class="video-surface"><div id="avatarVideo"></div></div>
-    <div class="call-head">
-      <img id="callPhoto" class="call-profile" alt="Портрет">
-      <div><div class="call-title" id="callName">Собеседник</div><div class="call-sub" id="callState">Соединение…</div></div>
+
+  <section class="call" id="callScreen" role="dialog" aria-label="Видеозвонок с фотоаватаром">
+    <div class="video-surface">
+      <div class="video-placeholder" aria-hidden="true"><span>PHOTOAVATAR RU · ВИДЕОСВЯЗЬ</span></div>
+      <div id="avatarVideo"></div>
     </div>
-    <div class="call-center"><div class="connecting" id="connecting"><div class="pulse">●</div><strong>Видеозвонок</strong><span id="loadingText">Подготавливаю соединение…</span></div></div>
-    <div class="call-bottom">
-      <div class="transcript" id="transcript"></div>
-      <div class="call-controls">
-        <button id="mute" class="circle" aria-label="Микрофон">🎙</button>
-        <button id="speaker" class="circle" aria-label="Динамик">🔊</button>
-        <button id="hangup" class="circle red" aria-label="Завершить">☎</button>
+    <header class="call-topbar">
+      <button id="callBack" class="call-icon-btn" aria-label="Завершить видеозвонок и вернуться"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="call-identity">
+        <img id="callPhoto" class="call-profile" alt="Фото собеседника">
+        <div style="min-width:0">
+          <div class="call-contact-name" id="callName">Собеседник</div>
+          <div class="call-state-line"><span id="callState">Соединение…</span><span class="call-time" id="callTime">00:00</span></div>
+        </div>
       </div>
-      <div class="ctrl-labels"><span>Микрофон</span><span>Звук</span><span>Завершить</span></div>
+      <button class="call-icon-btn" id="callInfo" aria-label="Диагностика соединения"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10.5v6"/><path d="M12 7.2v.2"/></svg></button>
+    </header>
+
+    <div class="call-selffeed" id="selfTile" aria-label="Ваша локальная камера">
+      <video id="selfVideo" class="hidden" playsinline autoplay muted></video>
+      <div id="selfPlaceholder" class="call-self-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="13" height="11" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg><span>Вы<br>Камера выкл.</span></div>
+      <button id="flipCamera" class="call-flip hidden" aria-label="Переключить камеру"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10a8 8 0 0 0-13.6-5.6L4 7M4 3v4h4M4 14a8 8 0 0 0 13.6 5.6L20 17m0 4v-4h-4"/></svg></button>
     </div>
+
+    <div class="call-center">
+      <div class="connecting" id="connecting">
+        <div class="pulse" aria-hidden="true">☎</div>
+        <strong>Видеозвонок</strong>
+        <span id="loadingText">Подготавливаю соединение…</span>
+      </div>
+      <div id="callError" class="call-error hidden" role="alert" aria-live="assertive">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 17v.5"/></svg>
+        <strong>Не удалось соединиться</strong>
+        <p id="callErrorMessage">Проверь подключение и попробуй снова.</p>
+        <small id="callErrorStage">Этап подключения</small>
+        <button id="callErrorClose">Вернуться к настройкам</button>
+      </div>
+    </div>
+
+    <pre class="call-diagnostics hidden" id="callDiagnostics" aria-label="Диагностика звонка"><span id="diagnosticOutput">Подготовка…</span></pre>
+    <div id="callToast" class="call-toast hidden" role="status"></div>
+
+    <footer class="call-bottom">
+      <div id="transcript" class="call-transcript" aria-live="polite"></div>
+      <div class="call-controls" role="toolbar" aria-label="Управление звонком">
+        <button id="speaker" class="call-control" aria-label="Включить или выключить звук" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a5 5 0 0 1 0 6M18.5 6a9 9 0 0 1 0 12"/></svg></button>
+        <button id="selfCamera" class="call-control off" aria-label="Включить или выключить камеру" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="13" height="11" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg></button>
+        <button id="mute" class="call-control" aria-label="Включить или выключить микрофон" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg></button>
+        <button id="hangup" class="call-control end" aria-label="Завершить видеозвонок"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.4 10.6c4.8-3.7 10.4-3.7 15.2 0l1.1 1.1c.6.6.6 1.6 0 2.2l-2 2c-.5.5-1.3.6-1.9.2l-2.3-1.4c-.3-.2-.5-.6-.5-1v-.7a8 8 0 0 0-4 0v.7c0 .4-.2.8-.5 1l-2.3 1.4c-.6.4-1.4.3-1.9-.2l-2-2a1.55 1.55 0 0 1 0-2.2z"/></svg></button>
+      </div>
+      <div class="call-control-labels"><span id="speakerLabel">Звук</span><span id="cameraLabel">Камера выкл.</span><span id="micLabel">Микрофон</span><span>Завершить</span></div>
+      <div class="call-footer">ФотоАватар RU · видеозвонок через Runway Characters</div>
+    </footer>
   </section>
   <script src="bundle.js" defer></script>
 </body>
