@@ -1,0 +1,59 @@
+name: "PhotoAvatar — Runway Dev API authorization"
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-runway-credentials:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RUNWAYML_API_SECRET: ${{ secrets.RUNWAYML_API_SECRET }}
+    steps:
+      - name: Verify Runway Dev key with read-only request (no generation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RUNWAYML_API_SECRET:-}" ]]; then
+            echo "Runway Dev: RUNWAYML_API_SECRET is not configured in Actions Secrets." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          # This GET is read-only. Do not print, store or upload the secret.
+          req = urllib.request.Request(
+              "https://api.dev.runwayml.com/v1/avatars?limit=1",
+              method="GET",
+              headers={
+                  "Authorization": "Bearer " + os.environ["RUNWAYML_API_SECRET"],
+                  "X-Runway-Version": "2024-11-06",
+                  "Accept": "application/json",
+              },
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=25) as response:
+                  status = response.status
+          except urllib.error.HTTPError as e:
+              status = e.code
+          except Exception:
+              status = None
+
+          messages = {
+              200: "Runway Dev: API key is accepted (read-only avatar listing).",
+              401: "Runway Dev: authentication failed (key inactive or invalid).",
+              403: "Runway Dev: authorization refused (project permissions or key scope).",
+              429: "Runway Dev: rate-limited; retry later.",
+              None: "Runway Dev: network error or timeout.",
+          }
+          message = messages.get(status, f"Runway Dev: unexpected HTTP status {status}.")
+          print(message)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(message + "\n")
+          # Deliberately never print the response body, token or any account data.
+          if status != 200:
+              sys.exit(1)
+          PY
