@@ -1,5 +1,9 @@
 name: "PhotoAvatar — Runway Dev API authorization"
 on:
+  push:
+    branches: [photoavatar-ru-android]
+    paths:
+      - ".github/workflows/photoavatar-runway-api-check.yml"
   workflow_dispatch:
 permissions:
   contents: read
