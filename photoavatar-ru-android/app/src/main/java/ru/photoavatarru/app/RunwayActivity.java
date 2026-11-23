@@ -212,6 +212,22 @@ public final class RunwayActivity extends Activity {
                         case "check":
                             result = new RunwayApi(RunwayActivity.this).checkKey();
                             break;
+                        case "qualityState":
+                            result = new JSONObject().put("codeformerConfigured",ReplicateCodeFormer.configured(RunwayActivity.this));
+                            break;
+                        case "setCodeFormerToken":
+                            ReplicateCodeFormer.setToken(RunwayActivity.this,p.optString("token",""));
+                            result = new JSONObject().put("configured",true);
+                            break;
+                        case "clearCodeFormerToken":
+                            ReplicateCodeFormer.removeToken(RunwayActivity.this);
+                            result = new JSONObject().put("configured",false);
+                            break;
+                        case "enhanceCodeFormer":
+                            // Replicate prediction is billable. JS requires a direct click + explicit consent.
+                            result = new ReplicateCodeFormer(RunwayActivity.this).enhance(
+                                p.getString("photo"),p.optDouble("fidelity",0.78));
+                            break;
                         case "createVoice":
                             result = new JSONObject().put("id",new RunwayApi(RunwayActivity.this).createVoice(
                                 p.optString("name","Голос"),p.optString("audio","")));
