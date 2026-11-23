@@ -10,7 +10,7 @@ function clip(v,min,max){return Math.max(min,Math.min(max,Number.isFinite(v)?v:m
 export function qualityFromMetrics(metrics) {
   // Heuristic suitability score for a video avatar, not an identity or beauty score.
   const {face=null,brightness=.5,contrast=.20,sharpness=.13}=metrics||{};
-  let score=42; const reasons=[];
+  let score=15; const reasons=[];
   if(!face || !face.detected) {
     return {score:Math.round(clip(25 + sharpness*20,0,38)),
       reasons:['Лицо не определено — лучше выбрать фронтальный портрет'],
