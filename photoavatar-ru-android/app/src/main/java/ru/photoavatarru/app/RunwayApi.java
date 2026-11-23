@@ -100,6 +100,17 @@ final class RunwayApi {
         return id;
     }
 
+    /** Read-only preflight. Runway avatar must reach READY before a billable realtime session. */
+    JSONObject getAvatarStatus(String avatarId) throws Exception {
+        if (!isUuid(avatarId)) throw new IOException("Неверный ID персонажа Runway");
+        JSONObject avatar = request("GET", "/v1/avatars/" + avatarId, null, apiKey);
+        String status = avatar.optString("status", "UNKNOWN").toUpperCase(java.util.Locale.ROOT);
+        return new JSONObject()
+            .put("id", avatarId)
+            .put("status", status)
+            .put("failureReason", cap(avatar.optString("failureReason", ""), 240));
+    }
+
     JSONObject startSession(String avatarId, String personality, String startScript) throws Exception {
         if (!isUuid(avatarId)) throw new IOException("Неверный ID персонажа Runway");
         JSONObject body = new JSONObject()
