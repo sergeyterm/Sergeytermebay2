@@ -1,5 +1,6 @@
 import { streamTo, AvatarEvent } from '@runwayml/avatars';
 import { composePortrait, makeDetectionImage } from './portrait-crop.js';
+import { createProController } from './pro-controller.js';
 
 const $ = (id) => document.getElementById(id);
 const pending = new Map();
@@ -28,6 +29,7 @@ let cameraFacing = 'user';
 let toastTimer = null;
 let remoteVideoProbe = null;
 let remoteVideoWarningShown = false;
+let proController = null;
 
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,7 +68,10 @@ function labelError(e) {
 }
 function setBusy(state) {
   busy = state;
-  for (const id of ['createAvatar','testConnection','startCall','saveKey']) $(id).disabled = state;
+  for (const id of ['createAvatar','testConnection','startCall','saveKey',
+    'generateVariants','runCodeFormer','generateAvatarCandidates','replaceAvatarImage']) {
+    if($(id))$(id).disabled = state;
+  }
 }
 function remember() {
   for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode']) {
@@ -74,7 +79,7 @@ function remember() {
   }
 }
 function restore() {
-  for (const id of ['name','topic','persona','voiceMode','voiceId']) {
+  for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode']) {
     const s = localStorage.getItem('runway_'+id);
     if (s !== null) $(id).value = s;
     $(id).addEventListener('change', remember);
@@ -125,6 +130,7 @@ async function loadImage(file) {
   $('tileBlock').classList.remove('hidden');
   $('photoHint').textContent = 'Выбран полный кадр. Для коллажа 3×3 нажми на один фронтальный ракурс ниже.';
   drawTiles();
+  if(proController)proController.photoUpdated();
   await detectFaceAndRender();
 }
 
@@ -159,8 +165,13 @@ function drawTiles() {
 }
 
 $('photo').addEventListener('change',async(e)=>{
-  try { await loadImage(e.target.files[0]);status('Фото загружено. Теперь настрой голос и описание собеседника.');}
-  catch(ex){labelError(ex);}
+  try {
+    const files=Array.from(e.target.files || []);
+    if(!files.length)return;
+    if(proController)await proController.chooseFiles(files);
+    else await loadImage(files[0]);
+    status('Фотографии проверены. Выбери лучший кадр и при необходимости открой Pro Quality.');
+  }catch(ex){labelError(ex);}
 });
 $('useFull').onclick=()=> {
   activeTile=-1;
@@ -184,6 +195,7 @@ function refreshPreparedPreview() {
     if(portrait.dataUrl.length>4_800_000)throw new Error('Референс слишком большой');
     preparedImage=portrait.dataUrl;
     $('preparedPreview').src=preparedImage;
+    if(proController)proController.clearPreparedVariants();
   }catch(e){
     preparedImage='';
     $('faceStatus').textContent='Ошибка подготовки кадра: '+(e.message||String(e));
@@ -213,6 +225,7 @@ async function detectFaceAndRender() {
     $('faceStatus').textContent='Автопоиск недоступен. Можно настроить масштаб вручную: '+(e.message||'ошибка');
   }
   refreshPreparedPreview();
+  if(proController)proController.updateQuality();
 }
 
 async function encodePortrait() {
@@ -221,7 +234,11 @@ async function encodePortrait() {
   if(!preparedImage || !preparedImage.startsWith('data:image/jpeg;base64,')){
     throw new Error('Не получилось подготовить референсное изображение.');
   }
-  return preparedImage;
+  if($('processingMode').value==='enhanced' && proController && !proController.currentVariant()) {
+    await proController.generateThree();
+    proController.selectVariant('enhanced');
+  }
+  return proController?.currentPhoto() || preparedImage;
 }
 
 function personaText() {
@@ -284,10 +301,15 @@ $('createAvatar').onclick = async () => {
     status('Создаю персонажа в Runway Characters…');
     const created=await native('createAvatar',{
       photo,name:$('name').value.trim(),personality:personaText(),voiceType,voiceId,
-      imageProcessing:$('processingMode').value
+      imageProcessing:$('processingMode').value==='enhanced'?'none':$('processingMode').value
     },80000);
     avatarId=created.id;
     localStorage.setItem('runway_avatar_id',avatarId);
+    if(proController)await proController.saveHistory({
+      avatarId,name:$('name').value.trim(),label:proController.currentVariant()?.name||'Создан',
+      kind:'created',image:photo,
+      processing:$('processingMode').value==='enhanced'?'none':$('processingMode').value
+    });
     // Save a low-resolution local portrait so the call backdrop does not show
     // a logo or a stretched technical placeholder after app restart.
     try {
@@ -331,7 +353,7 @@ $('replaceAvatarImage').onclick=async()=>{
     const result=await native('updateAvatarImage',{
       avatarId,
       photo,
-      imageProcessing:$('processingMode').value
+      imageProcessing:$('processingMode').value==='enhanced'?'none':$('processingMode').value
     },95000);
     if(!result.updated || result.id!==avatarId)throw new Error('Не удалось подтвердить обновление персонажа');
     // Only after the API confirms the operation, update local call preview.
@@ -342,6 +364,10 @@ $('replaceAvatarImage').onclick=async()=>{
     avatarPreview=thumbnail.toDataURL('image/jpeg',0.65);
     localStorage.setItem('runway_avatar_preview',avatarPreview);
     $('replaceAvatarConsent').checked=false;
+    if(proController)await proController.saveHistory({
+      avatarId,name:$('name').value.trim(),label:'Изображение обновлено',kind:'update',
+      image:photo,processing:$('processingMode').value==='enhanced'?'none':$('processingMode').value
+    });
     status('✓ Фото заменено. Avatar ID не изменился. Runway может заново обрабатывать персонажа. Перед звонком приложение проверит статус READY.');
   }catch(e){labelError(e);}
   finally{setBusy(false);}
@@ -691,6 +717,31 @@ $('mute').onclick=async()=>{
 $('speaker').onclick=()=>{speakerMuted=!speakerMuted;updateSpeaker();};
 $('hangup').onclick=()=>endCall();
 
+proController=createProController({
+  native,status,setBusy,isBusy:()=>busy,inCall:()=>inCall,
+  getImage:()=>image,getFace:()=>currentFace,getPrepared:()=>preparedImage,
+  getAvatarId:()=>avatarId,
+  setAvatarId:(id,preview='')=>{
+    avatarId=id;avatarPreview=preview;
+    localStorage.setItem('runway_avatar_id',id);
+    if(preview)localStorage.setItem('runway_avatar_preview',preview);
+    else localStorage.removeItem('runway_avatar_preview');
+    updateReady();
+    status('Персонаж выбран из истории. Он готов к проверке статуса Runway.');
+  },
+  loadImage,getPersona:personaText,
+  getName:()=>$('name').value.trim()||'Собеседник',
+  getVoice:()=>{
+    if($('voiceMode').value==='custom')return {type:'custom',id:UUID.test($('voiceId').value.trim())?
+        $('voiceId').value.trim():''};
+    return {type:'preset',id:$('voiceMode').value};
+  },
+  getProcessing:()=>$('processingMode').value,
+  setProcessing:(mode)=>{$('processingMode').value=mode;remember();},
+  getConsent:()=>$('consent').checked,
+  setAvatarPreview:(data)=>{avatarPreview=data;}
+});
+proController.wire();
 installRemoteVideoListeners();
 restore();
 native('state',{}).then(state=>{
