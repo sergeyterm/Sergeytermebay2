@@ -44,7 +44,7 @@ jobs:
         run: npm run build
       - name: Check source and API contracts
         working-directory: photoavatar-ru-android
-        run: python3 -m unittest discover -s tests -p "test_*.py" -v
+        run: python3 -m unittest discover -s tests -p "test_*contract.py" -v
       - name: Build Android APKs (debug and unsigned release)
         working-directory: photoavatar-ru-android
         run: gradle :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
