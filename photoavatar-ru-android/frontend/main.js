@@ -270,44 +270,50 @@ function appendTranscript(entry) {
   while($('transcript').children.length>14)$('transcript').firstElementChild.remove();
 }
 function updateSpeaker() {
-  const remote = $('avatarVideo').querySelectorAll('video,audio');
-  remote.forEach(e => {e.muted=speakerMuted;});
+  $('avatarAudio').muted = speakerMuted;
+  // Core SDK may have created an automatic audio element before attachAudio() ran.
+  // Mute that fallback to avoid duplicate playback; use our controllable audio element.
+  if(currentCall && currentCall.autoAudioElement) currentCall.autoAudioElement.muted = true;
   $('speaker').classList.toggle('off',speakerMuted);
   $('speaker').setAttribute('aria-pressed',String(!speakerMuted));
   $('speakerLabel').textContent=speakerMuted?'Звук выкл.':'Звук';
 }
 function updateCameraUI() {
-  const enabled = !!localStream;
-  $('selfVideo').classList.toggle('hidden',!enabled);
-  $('selfPlaceholder').classList.toggle('hidden',enabled);
+  const enabled = !!(currentCall && currentCall.camera && currentCall.camera.isEnabled);
+  $('selfVideo').classList.toggle('hidden',!enabled || !localStream);
+  $('selfPlaceholder').classList.toggle('hidden',enabled && !!localStream);
   $('flipCamera').classList.toggle('hidden',!enabled);
   $('selfCamera').classList.toggle('off',!enabled);
   $('selfCamera').setAttribute('aria-pressed',String(enabled));
   $('cameraLabel').textContent=enabled?'Камера':'Камера выкл.';
 }
+function attachSelfPreview(track) {
+  if(!inCall || !track)return;
+  // Use the exact LiveKit track already published to Runway, not a second camera stream.
+  localStream=new MediaStream([track]);
+  $('selfVideo').srcObject=localStream;
+  $('selfVideo').play().catch(()=>{});
+  updateCameraUI();
+}
 async function stopSelfCamera() {
-  const previous = localStream; localStream = null;
-  if(previous) previous.getTracks().forEach(track => track.stop());
-  const video = $('selfVideo');
+  if(currentCall && currentCall.camera && currentCall.camera.isEnabled)
+    await currentCall.camera.disable();
+  localStream=null;
+  const video=$('selfVideo');
   video.pause(); video.srcObject=null;
   updateCameraUI();
 }
 async function startSelfCamera() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error('Камера недоступна в текущей версии Android WebView');
-  }
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio:false,video:{facingMode:{ideal:cameraFacing},width:{ideal:480},height:{ideal:640}}
-  });
-  if(!inCall){stream.getTracks().forEach(track=>track.stop());return;}
-  localStream=stream;
-  $('selfVideo').srcObject=stream;
-  await $('selfVideo').play().catch(()=>{});
+  if(!currentCall || !currentCall.camera)throw new Error('Камера будет доступна после соединения');
+  await currentCall.camera.enable();
+  if(!currentCall.camera.isEnabled)
+    throw new Error('Камера недоступна для этого голоса или не разрешена в Android');
+  if(currentCall.localVideoTrack)attachSelfPreview(currentCall.localVideoTrack);
   updateCameraUI();
 }
 async function toggleSelfCamera() {
   if(!inCall)return;
-  try {if(localStream)await stopSelfCamera();else await startSelfCamera();}
+  try {if(currentCall?.camera?.isEnabled)await stopSelfCamera();else await startSelfCamera();}
   catch(e){showCallToast('Камера: '+(e.message || 'нет разрешения'));}
 }
 async function endCall() {
@@ -320,7 +326,9 @@ async function endCall() {
   try {if(oldCall) await oldCall.end();}catch(e){}
   if(oldSession) native('cancelSession',{sessionId:oldSession},25000).catch(()=>{});
   await stopSelfCamera();
-  $('avatarVideo').replaceChildren();
+  const remoteVideo=$('avatarVideo'), remoteAudio=$('avatarAudio');
+  remoteVideo.pause(); remoteVideo.srcObject=null;
+  remoteAudio.pause(); remoteAudio.srcObject=null;
   $('callScreen').classList.remove('active');
   $('connecting').classList.remove('hidden');
   $('callError').classList.add('hidden');
@@ -349,11 +357,16 @@ $('callInfo').onclick=()=>$('callDiagnostics').classList.toggle('hidden');
 $('callErrorClose').onclick=()=>endCall();
 $('selfCamera').onclick=()=>toggleSelfCamera();
 $('flipCamera').onclick=async()=>{
-  if(!localStream)return;
-  await stopSelfCamera();
-  cameraFacing=cameraFacing==='user'?'environment':'user';
-  try{await startSelfCamera();}
-  catch(e){showCallToast('Смена камеры: '+(e.message||'не получилось'));}
+  if(!currentCall || !currentCall.camera.isEnabled)return;
+  try {
+    const devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+    const currentId=currentCall.localVideoTrack?.getSettings()?.deviceId || '';
+    const alternate=devices.find(d=>d.deviceId && d.deviceId!==currentId);
+    if(!alternate)throw new Error('Другая камера недоступна');
+    await currentCall.camera.setDevice(alternate.deviceId);
+    if(currentCall.localVideoTrack)attachSelfPreview(currentCall.localVideoTrack);
+    showCallToast('Камера переключена');
+  } catch(e){showCallToast('Смена камеры: '+(e.message||'не получилось'));}
 };
 
 $('startCall').onclick = async () => {
@@ -401,12 +414,24 @@ $('startCall').onclick = async () => {
     }
     callSessionId=creds.sessionId||'';
     setCallStage('2/3 — WebRTC','Подключаем видео и микрофон…');
-    const session=await streamTo({credentials:creds,target:$('avatarVideo')});
+    // @runwayml/avatars 0.17.0 consumes the one-time sessionKey itself.
+    // The target MUST be HTMLVideoElement; default camera publishing is off
+    // until the user explicitly enables it with the camera button.
+    const session=await streamTo({credentials:creds,target:$('avatarVideo'),audio:true,video:false});
     if(!inCall||generation!==callGeneration){await session.end();return;}
     currentCall=session;
+    session.attachAudio($('avatarAudio'));
+    if(session.autoAudioElement) {
+      session.autoAudioElement.muted=true;
+      session.autoAudioElement.pause();
+    }
+    session.on(AvatarEvent.Transcript,appendTranscript);
+    session.on(AvatarEvent.LocalVideoReady,attachSelfPreview);
+    session.on(AvatarEvent.Error,e=>showCallToast('Runway: '+(e.message||e.code||'ошибка медиа')));
+    if(!session.mic.isEnabled)showCallToast('Разреши доступ к микрофону в настройках Android');
     setCallStage('3/3 — на связи','Видеозвонок · на связи');
     $('connecting').classList.add('hidden');
-    session.on(AvatarEvent.Transcript,appendTranscript);
+    updateCameraUI();
     updateSpeaker();
   }catch(e){
     if(inCall&&generation===callGeneration)showCallFailure(e,callStage);
