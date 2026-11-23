@@ -52,7 +52,7 @@ class RunwayContracts(unittest.TestCase):
         self.assertNotIn('RUNWAYML_API_SECRET',CLIENT+HTML)
         self.assertIn('appassets.androidplatform.net',ACTIVITY)
         self.assertIn('setAllowFileAccess(false)',ACTIVITY)
-        self.assertIn('setAllowContentAccess(false)',ACTIVITY)
+        self.assertIn('setAllowContentAccess(true)',ACTIVITY) # scoped to user-picked files
         self.assertIn('PermissionRequest.RESOURCE_AUDIO_CAPTURE',ACTIVITY)
         self.assertIn('request.deny()',ACTIVITY)
         self.assertNotIn('CAMERA',ACTIVITY)
