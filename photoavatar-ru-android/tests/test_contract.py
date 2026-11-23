@@ -20,7 +20,7 @@ class AndroidProjectContract(unittest.TestCase):
         names = {x.attrib.get(ns+'name') for x in root.findall('uses-permission')}
         self.assertIn('android.permission.INTERNET', names)
         self.assertIn('android.permission.RECORD_AUDIO', names)
-        self.assertNotIn('android.permission.CAMERA', names)
+        self.assertIn('android.permission.CAMERA', names)
         self.assertNotIn('android.permission.READ_EXTERNAL_STORAGE', names)
         app = root.find('application')
         self.assertEqual('false', app.attrib.get(ns+'usesCleartextTraffic'))
