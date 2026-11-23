@@ -271,7 +271,7 @@ $('resetAvatar').onclick = () => {
 
 
 function applyCallBackdrop(uri) {
-  const safeUri = uri && (uri.startsWith('data:image/') || uri.startsWith('https://')) ? uri : '';
+  const safeUri = uri && (uri.startsWith('data:image/') || uri.startsWith('https://') || uri.startsWith('blob:https://appassets.androidplatform.net/')) ? uri : '';
   const element = $('callBackdrop');
   if(!element)return;
   element.style.backgroundImage = safeUri ? 'url('+JSON.stringify(safeUri)+')' : 'none';
