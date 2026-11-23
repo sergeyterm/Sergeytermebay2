@@ -30,13 +30,17 @@ def run_checks():
             page.add_init_script("""(() => {
                 localStorage.setItem('runway_avatar_id', '"""+SAMPLE_ID+"""');
                 window.__calls = [];
+                window.__payloads = [];
                 window.__avatarStates = ['PROCESSING','READY'];
                 window.PhotoAvatarNative = {
-                    request(id, action) {
+                    request(id, action, raw) {
                         window.__calls.push(action);
+                        window.__payloads.push({action, data:JSON.parse(raw||'{}')});
                         let answer;
                         if (action === 'state') answer={ok:true,data:{embeddedKey:true,manualKey:false}};
                         else if (action === 'avatarStatus') answer={ok:true,data:{status:window.__avatarStates.shift()||'READY', previewUri:''}};
+                        else if (action === 'detectFace') answer={ok:true,data:{detected:true,facesCount:1,x:.24,y:.24,w:.52,h:.43}};
+                        else if (action === 'updateAvatarImage') answer={ok:true,data:{updated:true,id:'"""+SAMPLE_ID+"""'}};
                         else if (action === 'startSession') answer={ok:false,error:'Runway HTTP 402: Недостаточно кредитов (тест)'};
                         else if (action === 'cancelSession') answer={ok:true,data:{cancelled:true}};
                         else answer={ok:true,data:{}};
@@ -80,6 +84,37 @@ def run_checks():
             page.locator("#reuseId").fill(SAMPLE_ID)
             page.locator("#reuseAvatar").click()
             assert page.locator("#readyCard").is_visible(), "Existing avatar must be restorable by ID"
+            # Create a synthetic vertical phone portrait. No real user image is committed.
+            import base64
+            data_url=page.evaluate("""() => {
+                const c=document.createElement('canvas');
+                c.width=866;c.height=1536;
+                const g=c.getContext('2d');
+                g.fillStyle='#757a7a';g.fillRect(0,0,866,1536);
+                g.fillStyle='#c5a38d';g.beginPath();g.ellipse(440,710,225,360,0,0,2*Math.PI);g.fill();
+                g.fillStyle='#432d20';g.fillRect(160,1030,560,440);
+                return c.toDataURL('image/jpeg',0.8);
+            }""")
+            page.locator("#photo").set_input_files({
+                "name":"synthetic_portrait.jpg","mimeType":"image/jpeg",
+                "buffer":base64.b64decode(data_url.split(",",1)[1])
+            })
+            page.wait_for_function("document.querySelector('#preparedPreview').src.startsWith('data:image/jpeg;base64,')",timeout=15000)
+            page.wait_for_function("document.querySelector('#faceStatus').textContent.includes('Лицо найдено')",timeout=15000)
+            assert page.locator("#photoTools").is_visible()
+            assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalWidth") == 1088
+            assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalHeight") == 704
+            assert page.evaluate("window.__calls.includes('detectFace')"), "on-device face analysis must be invoked"
+            page.locator("#portraitZoom").fill("1.2")
+            page.locator("#processingMode").select_option("none")
+            page.locator("#replaceAvatarConsent").check()
+            page.locator("#replaceAvatarImage").click()
+            page.wait_for_function("document.querySelector('#status').textContent.includes('Фото заменено')",timeout=16000)
+            payload=page.evaluate("window.__payloads.filter(p=>p.action==='updateAvatarImage').at(-1).data")
+            assert payload["avatarId"]==SAMPLE_ID
+            assert payload["imageProcessing"]=="none"
+            assert payload["photo"].startswith("data:image/jpeg;base64,")
+            assert page.locator("#readyCard").is_visible(), "updating photo must preserve the avatar ID"
             assert not errors, "Uncaught client JS errors: "+repr(errors)
             print(f"PASS: messenger-style video call at {width}x{height}, controls, diagnostic overlay and persistent error")
             context.close()
