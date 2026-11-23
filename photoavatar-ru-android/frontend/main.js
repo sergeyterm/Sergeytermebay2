@@ -7,6 +7,7 @@ let image = null;
 let imageUrl = '';
 let activeTile = -1;
 let avatarId = '';
+let avatarPreview = '';
 let currentCall = null;
 let inCall = false;
 let micMuted = false;
@@ -73,6 +74,7 @@ function restore() {
     $(id).addEventListener('change', remember);
   }
   avatarId = localStorage.getItem('runway_avatar_id') || '';
+  avatarPreview = localStorage.getItem('runway_avatar_preview') || '';
   updateReady();
   updateVoiceMode();
 }
@@ -231,8 +233,18 @@ $('createAvatar').onclick = async () => {
     },80000);
     avatarId=created.id;
     localStorage.setItem('runway_avatar_id',avatarId);
+    // Save a low-resolution local portrait so the call backdrop does not show
+    // a logo or a stretched technical placeholder after app restart.
+    try {
+      const im = new Image(); im.src = photo; await im.decode();
+      const thumb = document.createElement('canvas');
+      thumb.width=320;thumb.height=208;
+      thumb.getContext('2d').drawImage(im,0,0,320,208);
+      avatarPreview=thumb.toDataURL('image/jpeg',0.65);
+      localStorage.setItem('runway_avatar_preview',avatarPreview);
+    } catch(e) {avatarPreview='';}
     updateReady();
-    status('Персонаж создан. Нажми «Начать видеозвонок».');
+    status('Персонаж отправлен в Runway и обрабатывается. При звонке приложение автоматически дождётся статуса READY. Не создавай его повторно.');
     $('readyCard').scrollIntoView({behavior:'smooth'});
   }catch(e){labelError(e);}
   finally{setBusy(false);}
@@ -241,6 +253,8 @@ $('reuseAvatar').onclick=()=>{
   const existing=$('reuseId').value.trim();
   if(!UUID.test(existing)){status('Укажи корректный Runway Avatar ID (UUID).',true);return;}
   avatarId=existing;
+  avatarPreview='';
+  localStorage.removeItem('runway_avatar_preview');
   localStorage.setItem('runway_avatar_id',existing);
   updateReady();
   status('ID сохранён в приложении. Персонаж будет проверен при начале звонка.');
@@ -248,12 +262,53 @@ $('reuseAvatar').onclick=()=>{
 };
 $('resetAvatar').onclick = () => {
   avatarId='';
+  avatarPreview='';
+  localStorage.removeItem('runway_avatar_preview');
   localStorage.removeItem('runway_avatar_id');
   updateReady();
   status('Можно создать нового персонажа. Ранее созданный персонаж остаётся в Runway Dev.');
 };
 
 
+function applyCallBackdrop(uri) {
+  const safeUri = uri && (uri.startsWith('data:image/') || uri.startsWith('https://')) ? uri : '';
+  const element = $('callBackdrop');
+  if(!element)return;
+  element.style.backgroundImage = safeUri ? 'url('+JSON.stringify(safeUri)+')' : 'none';
+  element.classList.toggle('with-image',!!safeUri);
+  // If image is unavailable, show a neutral dark call background, never a logo.
+  $('callPhoto').classList.toggle('hidden',!safeUri);
+  $('callPhotoFallback').classList.toggle('hidden',!!safeUri);
+  if(safeUri)$('callPhoto').src=safeUri;
+}
+const delay=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
+async function awaitAvatarReady(avatar,generation,timeoutMs=180000) {
+  const started=Date.now();
+  let attempt=0;
+  while(Date.now()-started < timeoutMs) {
+    if(!inCall || generation!==callGeneration)return false;
+    const data=await native('avatarStatus',{avatarId:avatar},30000);
+    if(!inCall || generation!==callGeneration)return false;
+    if(data.previewUri && !imageUrl)applyCallBackdrop(data.previewUri);
+    const state=String(data.status || 'UNKNOWN').toUpperCase();
+    if(state==='READY'){
+      setCallStage('1/3 — аватар готов','Аватар готов. Начинаем видеозвонок…');
+      return true;
+    }
+    if(state==='FAILED'){
+      throw new Error('Runway не смог обработать фотографию: '+(data.failureReason||'Статус FAILED. Проверь исходный портрет.'));
+    }
+    if(!['PROCESSING','PENDING','NOT_READY','UNKNOWN'].includes(state)){
+      throw new Error('Неизвестный статус аватара: '+state);
+    }
+    attempt++;
+    const elapsed=Math.floor((Date.now()-started)/1000);
+    setCallStage('0/3 — подготовка аватара','Обработка фотографии в Runway… '+elapsed+' сек.');
+    // These are read-only requests. Do not create a paid session while PROCESSING.
+    await delay(3000);
+  }
+  throw new Error('Аватар всё ещё обрабатывается. Повтори звонок позже. Повторно создавать персонажа не нужно.');
+}
 function setCallState(value) {
   $('callState').textContent=value;
   $('loadingText').textContent=value;
@@ -337,6 +392,7 @@ async function endCall() {
   await stopSelfCamera();
   const remoteVideo=$('avatarVideo'), remoteAudio=$('avatarAudio');
   remoteVideo.pause(); remoteVideo.srcObject=null;
+  $('callBackdrop').classList.remove('hidden');
   remoteAudio.pause(); remoteAudio.srcObject=null;
   $('callScreen').classList.remove('active');
   $('connecting').classList.remove('hidden');
@@ -396,14 +452,8 @@ $('startCall').onclick = async () => {
   $('mute').setAttribute('aria-pressed','true');
   $('micLabel').textContent='Микрофон';
   $('callName').textContent=$('name').value.trim() || 'Собеседник';
-  if(imageUrl){
-    $('callPhoto').src=imageUrl;
-    $('callPhoto').classList.remove('hidden');
-    $('callPhotoFallback').classList.add('hidden');
-  } else {
-    $('callPhoto').classList.add('hidden');
-    $('callPhotoFallback').classList.remove('hidden');
-  }
+  applyCallBackdrop(imageUrl || avatarPreview);
+  $('callBackdrop').classList.remove('hidden');
   $('transcript').replaceChildren();
   $('callScreen').classList.add('active');
   $('connecting').classList.remove('hidden');
@@ -420,6 +470,10 @@ $('startCall').onclick = async () => {
     $('callTime').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
   },1000);
   try {
+    setCallStage('0/3 — подготовка аватара','Проверяю готовность персонажа…');
+    const ready=await awaitAvatarReady(avatarId,generation);
+    if(!ready || !inCall || generation!==callGeneration)return;
+    setCallStage('1/3 — создание сессии','Вызываем собеседника…');
     const creds=await native('startSession',{
       avatarId,
       personality:personaText(),
@@ -443,6 +497,10 @@ $('startCall').onclick = async () => {
       session.autoAudioElement.pause();
     }
     session.on(AvatarEvent.Transcript,appendTranscript);
+    session.on(AvatarEvent.AvatarVideoReady,()=>{
+      // Only hide the portrait fallback when a real video track is available.
+      $('callBackdrop').classList.add('hidden');
+    });
     session.on(AvatarEvent.LocalVideoReady,attachSelfPreview);
     session.on(AvatarEvent.Error,e=>showCallToast('Runway: '+(e.message||e.code||'ошибка медиа')));
     if(!session.mic.isEnabled)showCallToast('Разреши доступ к микрофону в настройках Android');
