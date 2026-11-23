@@ -29,10 +29,14 @@ def run_checks():
             page.route(BASE+"**",intercept)
             page.add_init_script("""(() => {
                 localStorage.setItem('runway_avatar_id', '"""+SAMPLE_ID+"""');
+                window.__calls = [];
+                window.__avatarStates = ['PROCESSING','READY'];
                 window.PhotoAvatarNative = {
                     request(id, action) {
+                        window.__calls.push(action);
                         let answer;
                         if (action === 'state') answer={ok:true,data:{embeddedKey:true,manualKey:false}};
+                        else if (action === 'avatarStatus') answer={ok:true,data:{status:window.__avatarStates.shift()||'READY', previewUri:''}};
                         else if (action === 'startSession') answer={ok:false,error:'Runway HTTP 402: Недостаточно кредитов (тест)'};
                         else if (action === 'cancelSession') answer={ok:true,data:{cancelled:true}};
                         else answer={ok:true,data:{}};
@@ -48,11 +52,17 @@ def run_checks():
             for control in ["speaker","selfCamera","mute","hangup"]:
                 assert page.locator("#"+control).is_visible(), f"{control} invisible at {width}"
             assert page.locator("#selfTile").is_visible(), "self camera tile missing"
+            assert page.locator("#callBackdrop").count()==1, "background placeholder must be a portrait layer"
+            assert page.locator("#callBackdrop").evaluate("(el) => getComputedStyle(el).backgroundColor") != "rgba(0, 0, 0, 0)"
+            assert page.locator("#avatarVideo").evaluate("(el) => getComputedStyle(el).opacity") == "0", "remote video must not cover portrait before track is available"
             assert page.locator("#avatarVideo").evaluate("(el) => el.tagName") == "VIDEO", "SDK requires HTMLVideoElement"
             assert page.locator("#callName").inner_text().strip(), "call name absent"
             assert page.locator("#callTime").inner_text() == "00:00", "call duration not initialized"
             page.locator("#callError").wait_for(state="visible",timeout=12000)
             assert "Недостаточно кредитов" in page.locator("#callErrorMessage").inner_text()
+            calls=page.evaluate("window.__calls")
+            assert calls.count("avatarStatus")>=2, "must poll until READY"
+            assert calls.index("startSession")>calls.index("avatarStatus"), "must not create session before READY"
             assert not page.locator("#callDiagnostics").is_visible()
             page.locator("#callInfo").click()
             assert page.locator("#callDiagnostics").is_visible()
