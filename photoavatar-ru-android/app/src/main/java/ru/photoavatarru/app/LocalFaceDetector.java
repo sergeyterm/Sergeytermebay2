@@ -7,6 +7,7 @@ import android.util.Base64;
 
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
+import com.google.mlkit.vision.face.FaceLandmark;
 import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 
@@ -39,6 +40,7 @@ final class LocalFaceDetector {
             FaceDetectorOptions options=new FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
                 .setMinFaceSize(0.08f)
                 .build();
             com.google.mlkit.vision.face.FaceDetector detector=FaceDetection.getClient(options);
@@ -72,8 +74,25 @@ final class LocalFaceDetector {
         result.put("x",x).put("y",y)
               .put("w",Math.max(0,right-x)).put("h",Math.max(0,bottom-y));
         result.put("yaw",face.getHeadEulerAngleY());
+        result.put("pitch",face.getHeadEulerAngleX());
         result.put("roll",face.getHeadEulerAngleZ());
+        double leftOpen=face.getLeftEyeOpenProbability();
+        double rightOpen=face.getRightEyeOpenProbability();
+        if(leftOpen>=0 && leftOpen<=1) result.put("leftEyeOpen",leftOpen);
+        if(rightOpen>=0 && rightOpen<=1) result.put("rightEyeOpen",rightOpen);
+        // Landmark coordinates are normalized to the detected image, never the full phone gallery.
+        putLandmark(result,"leftEye",face.getLandmark(FaceLandmark.LEFT_EYE),width,height);
+        putLandmark(result,"rightEye",face.getLandmark(FaceLandmark.RIGHT_EYE),width,height);
+        putLandmark(result,"noseBase",face.getLandmark(FaceLandmark.NOSE_BASE),width,height);
         return result;
+    }
+
+    private static void putLandmark(JSONObject dst, String name, FaceLandmark landmark,
+                                    int width, int height) throws Exception {
+        if(landmark==null)return;
+        dst.put(name,new JSONObject()
+            .put("x",Math.max(0,Math.min(1,landmark.getPosition().x / width)))
+            .put("y",Math.max(0,Math.min(1,landmark.getPosition().y / height))));
     }
 
     private LocalFaceDetector() {}
