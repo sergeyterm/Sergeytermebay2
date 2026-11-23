@@ -392,6 +392,7 @@ async function endCall() {
   await stopSelfCamera();
   const remoteVideo=$('avatarVideo'), remoteAudio=$('avatarAudio');
   remoteVideo.pause(); remoteVideo.srcObject=null;
+  remoteVideo.classList.remove('playing');
   $('callBackdrop').classList.remove('hidden');
   remoteAudio.pause(); remoteAudio.srcObject=null;
   $('callScreen').classList.remove('active');
@@ -453,6 +454,7 @@ $('startCall').onclick = async () => {
   $('micLabel').textContent='Микрофон';
   $('callName').textContent=$('name').value.trim() || 'Собеседник';
   applyCallBackdrop(imageUrl || avatarPreview);
+  $('avatarVideo').classList.remove('playing');
   $('callBackdrop').classList.remove('hidden');
   $('transcript').replaceChildren();
   $('callScreen').classList.add('active');
@@ -498,8 +500,8 @@ $('startCall').onclick = async () => {
     }
     session.on(AvatarEvent.Transcript,appendTranscript);
     session.on(AvatarEvent.AvatarVideoReady,()=>{
-      // Only hide the portrait fallback when a real video track is available.
-      $('callBackdrop').classList.add('hidden');
+      // Never leave the screen black during avatar processing.
+      $('avatarVideo').classList.add('playing');
     });
     session.on(AvatarEvent.LocalVideoReady,attachSelfPreview);
     session.on(AvatarEvent.Error,e=>showCallToast('Runway: '+(e.message||e.code||'ошибка медиа')));
