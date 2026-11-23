@@ -37,7 +37,7 @@ class RunwayContracts(unittest.TestCase):
     def test_client_browser_and_controls(self):
         self.assertIn("from '@runwayml/avatars'", CLIENT)
         for token in ['streamTo({credentials:', 'AvatarEvent.Transcript',
-                      'currentCall.mic.toggle()', 'currentCall.end()',
+                      'currentCall.mic.toggle()', 'oldCall.end()',
                       'tile%3','Math.floor(tile/3)','toDataURL',
                       "'startSession'","'createAvatar'","'createVoice'"]:
             self.assertIn(token,CLIENT)
@@ -55,7 +55,10 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('setAllowContentAccess(true)',ACTIVITY) # scoped to user-picked files
         self.assertIn('PermissionRequest.RESOURCE_AUDIO_CAPTURE',ACTIVITY)
         self.assertIn('request.deny()',ACTIVITY)
-        self.assertNotIn('CAMERA',ACTIVITY)
+        self.assertIn('Manifest.permission.CAMERA',ACTIVITY)
+        self.assertIn('PermissionRequest.RESOURCE_VIDEO_CAPTURE',ACTIVITY)
+        self.assertIn('case "cancelSession":',ACTIVITY)
+        self.assertIn('request("DELETE"',RUNWAY)
         self.assertIn('new RunwayApi(RunwayActivity.this)',ACTIVITY)
 
     def test_no_secret_in_public_repo(self):
