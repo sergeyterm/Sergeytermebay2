@@ -105,9 +105,13 @@ final class RunwayApi {
         if (!isUuid(avatarId)) throw new IOException("Неверный ID персонажа Runway");
         JSONObject avatar = request("GET", "/v1/avatars/" + avatarId, null, apiKey);
         String status = avatar.optString("status", "UNKNOWN").toUpperCase(java.util.Locale.ROOT);
+        String preview = avatar.optString("processedImageUri", "");
+        if (!preview.startsWith("https://")) preview = avatar.optString("referenceImageUri", "");
+        if (!preview.startsWith("https://")) preview = "";
         return new JSONObject()
             .put("id", avatarId)
             .put("status", status)
+            .put("previewUri", preview)
             .put("failureReason", cap(avatar.optString("failureReason", ""), 240));
     }
 
