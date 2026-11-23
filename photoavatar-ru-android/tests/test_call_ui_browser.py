@@ -42,6 +42,10 @@ def run_checks():
                         else if (action === 'detectFace') answer={ok:true,data:{detected:true,facesCount:1,x:.24,y:.24,w:.52,h:.43}};
                         else if (action === 'updateAvatarImage') answer={ok:true,data:{updated:true,id:'"""+SAMPLE_ID+"""'}};
                         else if (action === 'qualityState') answer={ok:true,data:{codeformerConfigured:false}};
+                        else if (action === 'pickPhotos') {
+                            const names=window.__pickMode==='multi'?['good.jpg','broken.jpg']:window.__pickMode==='bad'?['broken.jpg']:window.__pickMode==='single'?['good.jpg']:[];
+                            answer={ok:true,data:{photos:names.map(name=>({url:location.origin+'/import/'+name,name})),errors:[]}};
+                        }
                         else if (action === 'createAvatar') {
                             window.__candidateNumber=(window.__candidateNumber||0)+1;
                             answer={ok:true,data:{id:'11111111-1111-4111-8111-'+String(window.__candidateNumber).padStart(12,'0')}};
@@ -134,6 +138,35 @@ def run_checks():
             assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalWidth") == 1088
             assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalHeight") == 704
             assert page.evaluate("window.__calls.includes('detectFace')"), "on-device face analysis must be invoked"
+            # Native picker bridge is mocked; validate the real bundled import client.
+            page.route("https://appassets.androidplatform.net/import/**", lambda route: route.fulfill(
+                status=200,content_type="image/jpeg",
+                body=base64.b64decode(data_url.split(",",1)[1]) if route.request.url.endswith("good.jpg") else b"invalid image"
+            ))
+            page.evaluate("""() => {
+                document.querySelector('#nativePhotoPicker').classList.remove('hidden');
+                document.querySelector('#browserPhotoPicker').classList.add('hidden');
+                window.__pickMode='multi';
+            }""")
+            page.locator("#nativePhotoPicker").click()
+            page.wait_for_function("!document.querySelector('#nativePhotoPicker').disabled",timeout=15000)
+            assert page.locator("#bestShotList .quality-item").count()==2
+            assert page.locator("#bestShotList button:disabled").count()==1
+            assert page.evaluate("window.__calls.includes('releasePhotos')")
+            assert 'загружены' in page.locator("#photoImportStatus").inner_text()
+            previous=page.locator("#preparedPreview").get_attribute("src")
+            for mode, expected in [("cancel","отменён"),("bad","Не удалось")]:
+                page.evaluate("(mode)=>window.__pickMode=mode",mode)
+                page.locator("#nativePhotoPicker").click()
+                page.wait_for_function("!document.querySelector('#nativePhotoPicker').disabled",timeout=15000)
+                assert expected in page.locator("#photoImportStatus").inner_text()
+                assert page.locator("#preparedPreview").get_attribute("src")==previous
+            page.evaluate("window.__pickMode='single'")
+            page.locator("#nativePhotoPicker").click()
+            page.wait_for_function("!document.querySelector('#nativePhotoPicker').disabled",timeout=15000)
+            assert 'загружены' in page.locator("#photoImportStatus").inner_text()
+            assert page.locator("#bestShotList .quality-item").count()==1
+            print(f"PASS: photo import {width}x{height}, native bridge mock, preview, corrupt file, cancel, retry")
             page.locator("#portraitZoom").evaluate("(el) => {el.value='1.2';el.dispatchEvent(new Event('input',{bubbles:true}))}")
             page.locator("#processingMode").select_option("none")
             page.locator("#replaceAvatarConsent").check()

@@ -109,11 +109,23 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('INSERT_PRIVATE_KEY_IN_SIGNING_STEP_ONLY',
                       (MAIN/'assets/runway.key').read_text())
 
+    def test_native_photo_import(self):
+        importer=(JAVA/'PhotoImporter.java').read_text()
+        self.assertIn('Intent.ACTION_OPEN_DOCUMENT',ACTIVITY)
+        self.assertIn('Intent.EXTRA_ALLOW_MULTIPLE',ACTIVITY)
+        self.assertIn('PhotoImporter.selectedUris(data)',ACTIVITY)
+        self.assertIn('PhotoImporter.readJpeg(getContentResolver(), uri)',ACTIVITY)
+        self.assertIn('ImageDecoder.createSource(resolver,uri)',importer)
+        self.assertIn('MAX_EDGE = 2560, MAX_FILES = 4',importer)
+        self.assertIn('"/import/"',ACTIVITY)
+        self.assertIn("native('releasePhotos'",CLIENT)
+        self.assertIn('nativePhotoPicker',HTML)
+
     def test_android_target(self):
         data=(ROOT/'app/build.gradle').read_text()
         self.assertRegex(data,r'compileSdk\s+35')
         self.assertRegex(data,r'minSdk\s+26')
-        self.assertIn("versionName '1.6.0'",data)
+        self.assertIn("versionName '1.6.1'",data)
 
 if __name__=='__main__':
     unittest.main()
