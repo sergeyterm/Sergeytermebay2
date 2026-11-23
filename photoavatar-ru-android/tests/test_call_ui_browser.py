@@ -105,7 +105,7 @@ def run_checks():
             assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalWidth") == 1088
             assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalHeight") == 704
             assert page.evaluate("window.__calls.includes('detectFace')"), "on-device face analysis must be invoked"
-            page.locator("#portraitZoom").fill("1.2")
+            page.locator("#portraitZoom").evaluate("(el) => {el.value='1.2';el.dispatchEvent(new Event('input',{bubbles:true}))}")
             page.locator("#processingMode").select_option("none")
             page.locator("#replaceAvatarConsent").check()
             page.locator("#replaceAvatarImage").click()
