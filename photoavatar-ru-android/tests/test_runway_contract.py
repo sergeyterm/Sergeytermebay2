@@ -39,6 +39,17 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('validatedProcessing(processing)',RUNWAY)
         self.assertIn('"imageProcessing"',RUNWAY)
         self.assertIn('case "updateAvatarImage":',ACTIVITY)
+        self.assertIn('case "qualityState":',ACTIVITY)
+        self.assertIn('case "enhanceCodeFormer":',ACTIVITY)
+        self.assertIn('case "setCodeFormerToken":',ACTIVITY)
+        self.assertIn('FaceLandmark.LEFT_EYE',(JAVA/'LocalFaceDetector.java').read_text())
+        self.assertIn('FaceLandmark.RIGHT_EYE',(JAVA/'LocalFaceDetector.java').read_text())
+        self.assertIn('ReplicateCodeFormer',(JAVA/'ReplicateCodeFormer.java').read_text())
+        self.assertIn('from \'./pro-controller.js\'',CLIENT)
+        for ident in ('qualitySummary','generateVariants','variantsGrid','qualityEyeDetail',
+                       'bestShotList','runCodeFormer','replicateToken','codeformerConsent',
+                       'generateAvatarCandidates','qualityGenerateConsent','historyList'):
+            self.assertIn(f'id="{ident}"',HTML)
         self.assertIn('case "detectFace":',ACTIVITY)
         self.assertIn('com.google.mlkit:face-detection:16.1.7',(ROOT/'app/build.gradle').read_text())
         self.assertIn("import { composePortrait, makeDetectionImage } from './portrait-crop.js';",CLIENT)
@@ -102,7 +113,7 @@ class RunwayContracts(unittest.TestCase):
         data=(ROOT/'app/build.gradle').read_text()
         self.assertRegex(data,r'compileSdk\s+35')
         self.assertRegex(data,r'minSdk\s+26')
-        self.assertIn("versionName '1.5.1'",data)
+        self.assertIn("versionName '1.6.0'",data)
 
 if __name__=='__main__':
     unittest.main()

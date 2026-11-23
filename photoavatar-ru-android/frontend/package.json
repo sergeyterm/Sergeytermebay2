@@ -1,10 +1,11 @@
 {
   "name": "photoavatar-runway-webrtc",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "test:crop": "node --test portrait-crop.test.js",
+    "test:quality": "node --test pro-quality.test.js",
     "build": "esbuild main.js --bundle --format=iife --platform=browser --target=es2020 --minify --outfile=../app/src/main/assets/bundle.js"
   },
   "dependencies": {
