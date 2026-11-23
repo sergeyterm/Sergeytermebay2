@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07141c">
+  <title>ФотоАватар RU — Runway</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07141c;--panel:#102834;--panel2:#153340;--border:#254752;--text:#edf7f6;--secondary:#a1bac0;--green:#25d5a2;--red:#f45165}
+    *{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Roboto,Arial,sans-serif}button,input,textarea,select{font:inherit}
+    button{touch-action:manipulation;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}
+    .setup{height:100%;overflow-y:auto;overscroll-behavior:contain;padding:21px max(18px,env(safe-area-inset-right)) 48px max(18px,env(safe-area-inset-left))}
+    .inner{max-width:690px;margin:auto}.eyebrow{font-weight:900;color:var(--green);font-size:11px;letter-spacing:2.2px}
+    h1{margin:7px 0 9px;font-size:clamp(28px,5vw,37px);line-height:1.06;letter-spacing:-1.2px}
+    p.sub{color:var(--secondary);margin:0 0 20px;max-width:50ch}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:22px;margin:14px 0;padding:20px;box-shadow:0 15px 45px #0002}
+    .card h2{font-size:17px;margin:0 0 13px;letter-spacing:.1px}.card small{color:var(--secondary);display:block;margin:-5px 0 13px}
+    label{display:block;font-size:12px;color:var(--secondary);font-weight:650;margin:14px 0 6px}
+    input[type=text],input[type=password],textarea,select{width:100%;background:#081d26;border:1px solid var(--border);border-radius:12px;color:var(--text);padding:12px 13px;outline:none}
+    input:focus,textarea:focus,select:focus{border-color:var(--green)}
+    textarea{resize:vertical;min-height:85px}.btn{width:100%;border:0;border-radius:13px;font-weight:800;min-height:48px;background:var(--green);color:#02231b}
+    .btn.alt{background:var(--panel2);border:1px solid var(--border);color:var(--text)}.btn.danger{background:var(--red);color:white}
+    .buttons{display:flex;gap:9px;align-items:center}.buttons .btn{flex:1}.file{display:block;border:1px dashed #4a6b78;border-radius:13px;padding:13px;background:#0d2732;color:var(--text);margin:9px 0;overflow:hidden}
+    .file input{width:100%;font-size:13px;color:var(--secondary)}
+    .preview{width:100%;height:auto;max-height:260px;border-radius:16px;object-fit:contain;background:#07141c;display:none}
+    .tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0}
+    .tile-grid button{border:2px solid transparent;border-radius:10px;background:var(--bg);min-height:76px;overflow:hidden;position:relative;padding:0}
+    .tile-grid button[aria-pressed=true]{border-color:var(--green)}
+    .tile-grid canvas{display:block;width:100%;height:98px;object-fit:cover}
+    .tile-grid em{position:absolute;right:4px;bottom:3px;font-style:normal;border-radius:6px;padding:1px 6px;font-size:11px;background:#051821d9}
+    .hint{font-size:12px;color:var(--secondary);margin-top:7px}
+    .status{margin:13px 0;padding:12px 13px;border:1px solid #24505a;border-radius:12px;color:var(--secondary);background:#102a32;white-space:pre-wrap}
+    .status.ok{border-color:#28846a;color:#b3f5dc}.status.bad{border-color:#a83b50;color:#ffd6dc}
+    .switch-row{display:flex;align-items:center;gap:9px;margin-top:12px}
+    .switch-row input{width:18px;height:18px;accent-color:var(--green)}
+    .switch-row span{font-size:12px;color:var(--secondary)}
+    .hidden{display:none!important}
+    .call{position:fixed;inset:0;background:#091821;display:none;z-index:30;overflow:hidden}
+    .call.active{display:flex;flex-direction:column}
+    .call video{object-fit:cover}
+    .video-surface{position:absolute;inset:0;background:#071820;display:flex;align-items:center;justify-content:center}
+    #avatarVideo{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+    #avatarVideo video{width:100%;height:100%;object-fit:cover}
+    .video-surface:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,#001019c9 0%,transparent 30%,transparent 57%,#001019e8 100%)}
+    .call-head{position:relative;z-index:2;display:flex;align-items:center;gap:12px;padding:18px 22px}
+    .call-profile{width:48px;height:48px;border-radius:16px;border:1px solid #ffffff5c;object-fit:cover;background:#142933}
+    .call-title{font-size:19px;font-weight:800}.call-sub{font-size:12px;color:#a3ffe6}
+    .call-center{position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px}
+    .connecting{display:flex;flex-direction:column;gap:10px;align-items:center;background:#08141b82;padding:23px;border-radius:20px}
+    .pulse{width:72px;height:72px;border-radius:50%;background:#145e55;display:grid;place-items:center;font-size:26px;box-shadow:0 0 0 10px #1f978720}
+    .call-bottom{position:relative;z-index:3;padding:12px 16px max(28px,env(safe-area-inset-bottom));background:#09202a77}
+    .call-controls{display:flex;justify-content:center;gap:15px}.circle{width:61px;height:61px;background:#ffffff2c;border:1px solid #ffffff52;color:white;border-radius:50%;font-size:25px}
+    .circle.red{background:#e9435a;border-color:#f66473}.circle.off{background:#782c3e}
+    .ctrl-labels{display:grid;grid-template-columns:repeat(3,61px);justify-content:center;gap:15px;margin:8px 0 0;font-size:11px;text-align:center;color:#d1e5e7}
+    .transcript{max-height:98px;overflow:auto;color:#b2d0d2;font-size:12px;margin:0 auto 12px;max-width:500px;text-shadow:0 1px 2px #000b}
+    @media(min-width:690px){.call.active{inset:0;max-width:100%}.setup{padding-top:33px}.tile-grid button canvas{height:124px}}
+  </style>
+</head>
+<body>
+  <section class="setup" id="setup">
+    <div class="inner">
+      <div class="eyebrow">PHOTOAVATAR RU / RUNWAY CHARACTERS</div>
+      <h1>Звонок с ожившим портретом</h1>
+      <p class="sub">Собственный фотоаватар, голос по референсу и разговор на русском. Всё в одном Android-приложении.</p>
+
+      <section class="card">
+        <h2>01 · Внешность собеседника</h2>
+        <small>Одна фотография или коллаж 3×3. В коллаже выбери фронтальный ракурс — Runway анимирует только эту ячейку, не обучает 3D-модель по девяти фото.</small>
+        <label class="file">Загрузить фотографию / коллаж<input id="photo" type="file" accept="image/*"></label>
+        <img id="preview" class="preview" alt="Выбранный портрет">
+        <div id="tileBlock" class="hidden">
+          <label>Ракурс из сетки 3×3</label>
+          <div class="tile-grid" id="tiles"></div>
+          <button class="btn alt" id="useFull">Использовать полный портрет</button>
+        </div>
+        <div class="hint" id="photoHint">Для большей реалистичности используй качественный портрет, лицо прямо в камеру.</div>
+      </section>
+
+      <section class="card">
+        <h2>02 · Характер и тема разговора</h2>
+        <label>Как зовут собеседника?</label>
+        <input id="name" type="text" maxlength="100" value="Мой собеседник" placeholder="Имя">
+        <label>О чём будем говорить?</label>
+        <textarea id="topic" maxlength="3500" placeholder="Предыстория, важные факты, предмет разговора">Обычная доверительная беседа. Разговаривай со мной на русском языке.</textarea>
+        <label>Характер, манера речи и поведение</label>
+        <textarea id="persona" maxlength="3500" placeholder="Например: деликатный, с юмором, умный, заботливый">Говори естественно, без длинных монологов. Слушай внимательно, отвечай по существу и задавай встречные вопросы.</textarea>
+      </section>
+
+      <section class="card">
+        <h2>03 · Голос</h2>
+        <small>Runway умеет клонировать голос из аудиозаписи. Для использования чужого голоса необходимо разрешение владельца.</small>
+        <label>Режим голоса</label>
+        <select id="voiceMode">
+          <option value="clara">Clara — мягкий женский</option>
+          <option value="victoria">Victoria — уверенный женский</option>
+          <option value="vincent">Vincent — глубокий мужской</option>
+          <option value="marcus">Marcus — мужской</option>
+          <option value="mia">Mia — женский</option>
+          <option value="custom">Клонировать голос из референса</option>
+        </select>
+        <div id="voiceFields" class="hidden">
+          <label class="file">Референс голоса (10 сек — 5 мин, до 5 МБ)<input id="voiceFile" type="file" accept="audio/*"></label>
+          <label>ID ранее созданного голоса (необязательно)</label>
+          <input type="text" id="voiceId" placeholder="UUID голоса Runway">
+        </div>
+        <label class="switch-row"><input type="checkbox" id="consent"><span>У меня есть право использовать эти фото и голос; понимаю, что создание персонажа и звонки могут расходовать платные кредиты Runway.</span></label>
+      </section>
+
+      <section class="card" id="keyCard">
+        <h2>04 · Подключение Runway Dev</h2>
+        <div class="hint" id="keyStatus">Проверка конфигурации приложения…</div>
+        <div id="manualKeyBox" class="hidden">
+          <label>API-ключ (если не встроен или был заменён)</label>
+          <input id="manualKey" type="password" autocomplete="off" placeholder="key_…">
+          <button class="btn alt" id="saveKey" style="margin-top:9px">Сохранить ключ на устройстве</button>
+        </div>
+        <div class="buttons" style="margin-top:13px">
+          <button class="btn alt" id="testConnection">Проверить API</button>
+          <button class="btn" id="createAvatar">Создать персонажа</button>
+        </div>
+        <div id="status" class="status" aria-live="polite">Выбери фотографию и настрой собеседника.</div>
+      </section>
+      <section class="card hidden" id="readyCard">
+        <h2>Персонаж готов к разговору</h2>
+        <small id="readyId"></small>
+        <button class="btn" id="startCall">📞 Начать видеозвонок</button>
+        <button class="btn alt" id="resetAvatar" style="margin-top:9px">Создать другого персонажа</button>
+        <div class="hint">Одна сессия Runway Characters — до пяти минут. При повторном звонке создаётся новая сессия.</div>
+      </section>
+    </div>
+  </section>
+
+  <section class="call" id="callScreen">
+    <div class="video-surface"><div id="avatarVideo"></div></div>
+    <div class="call-head">
+      <img id="callPhoto" class="call-profile" alt="Портрет">
+      <div><div class="call-title" id="callName">Собеседник</div><div class="call-sub" id="callState">Соединение…</div></div>
+    </div>
+    <div class="call-center"><div class="connecting" id="connecting"><div class="pulse">●</div><strong>Видеозвонок</strong><span id="loadingText">Подготавливаю соединение…</span></div></div>
+    <div class="call-bottom">
+      <div class="transcript" id="transcript"></div>
+      <div class="call-controls">
+        <button id="mute" class="circle" aria-label="Микрофон">🎙</button>
+        <button id="speaker" class="circle" aria-label="Динамик">🔊</button>
+        <button id="hangup" class="circle red" aria-label="Завершить">☎</button>
+      </div>
+      <div class="ctrl-labels"><span>Микрофон</span><span>Звук</span><span>Завершить</span></div>
+    </div>
+  </section>
+  <script src="bundle.js" defer></script>
+</body>
+</html>
