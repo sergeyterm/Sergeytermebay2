@@ -24,10 +24,10 @@ final class RunwayApi {
             byte[] bytes = readBytes(in, 1024);
             key = new String(bytes, StandardCharsets.UTF_8).trim();
         } catch (IOException ignored) { }
-        if (!key.startsWith("key_") || key.length() != 132) {
-            // Allows testing the open-source/debug build without embedding a personal secret.
-            key = context.getSharedPreferences("runway_ru", Context.MODE_PRIVATE).getString("manual_key", "").trim();
-        }
+        // A manually rotated key must override the embedded key without reinstalling the APK.
+        String replacement = context.getSharedPreferences("runway_ru", Context.MODE_PRIVATE)
+            .getString("manual_key", "").trim();
+        if (replacement.matches("key_[0-9a-fA-F]{128}")) key = replacement;
         if (!key.startsWith("key_") || key.length() != 132) {
             throw new IOException("API-ключ отсутствует. Укажи ключ в настройках или установи личную сборку.");
         }
