@@ -41,6 +41,11 @@ def run_checks():
                         else if (action === 'avatarStatus') answer={ok:true,data:{status:window.__avatarStates.shift()||'READY', previewUri:''}};
                         else if (action === 'detectFace') answer={ok:true,data:{detected:true,facesCount:1,x:.24,y:.24,w:.52,h:.43}};
                         else if (action === 'updateAvatarImage') answer={ok:true,data:{updated:true,id:'"""+SAMPLE_ID+"""'}};
+                        else if (action === 'qualityState') answer={ok:true,data:{codeformerConfigured:false}};
+                        else if (action === 'createAvatar') {
+                            window.__candidateNumber=(window.__candidateNumber||0)+1;
+                            answer={ok:true,data:{id:'11111111-1111-4111-8111-'+String(window.__candidateNumber).padStart(12,'0')}};
+                        }
                         else if (action === 'startSession') answer={ok:false,error:'Runway HTTP 402: Недостаточно кредитов (тест)'};
                         else if (action === 'cancelSession') answer={ok:true,data:{cancelled:true}};
                         else answer={ok:true,data:{}};
@@ -131,6 +136,30 @@ def run_checks():
             assert payload["imageProcessing"]=="none"
             assert payload["photo"].startswith("data:image/jpeg;base64,")
             assert page.locator("#readyCard").is_visible(), "updating photo must preserve the avatar ID"
+            page.locator("#proQualityDetails").evaluate("(el)=>el.open=true")
+            page.locator("#generateVariants").click()
+            page.wait_for_function("document.querySelectorAll('#variantsGrid .quality-item').length===3",timeout=16000)
+            assert page.locator("#variantsGrid .quality-item").count() == 3
+            page.locator("#variantsGrid .quality-item").last.locator("button").click()
+            assert "Выбран" in page.locator("#selectedVariantStatus").inner_text()
+            assert page.locator("#processingMode").input_value()=="enhanced"
+            # CodeFormer is explicitly opt-in. Without consent no Replicate job runs.
+            page.locator("#codeFormerDetails").evaluate("(el)=>el.open=true")
+            before_count=page.evaluate("window.__calls.filter(a=>a==='enhanceCodeFormer').length")
+            page.locator("#runCodeFormer").click()
+            page.wait_for_function("document.querySelector('#codeformerState').textContent.includes('Подтверди')",timeout=5000)
+            assert page.evaluate("window.__calls.filter(a=>a==='enhanceCodeFormer').length")==before_count
+            # Avatar history is persisted in IndexedDB after updating a reference.
+            page.wait_for_function("document.querySelectorAll('#historyList .quality-history-item').length>0",timeout=12000)
+            page.locator("#avatarVersionsDetails").evaluate("(el)=>el.open=true")
+            assert page.locator("#historyList .quality-history-item").count()>0
+            page.locator("#qualityGenerateCount").select_option("2")
+            page.locator("#qualityGenerateConsent").check()
+            page.locator("#generateAvatarCandidates").click()
+            page.wait_for_function("document.querySelector('#variantBatchStatus').textContent.includes('Создано 2')",timeout=30000)
+            assert page.evaluate("window.__calls.filter(a=>a==='createAvatar').length")==2
+            assert page.locator("#historyList .quality-history-item").count()>=3
+
             assert not errors, "Uncaught client JS errors: "+repr(errors)
             print(f"PASS: messenger-style video call at {width}x{height}, controls, diagnostic overlay and persistent error")
             context.close()
