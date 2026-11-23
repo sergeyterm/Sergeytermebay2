@@ -27,7 +27,7 @@ def run_checks():
                 else:
                     route.abort()
             page.route(BASE+"**",intercept)
-            page.add_init_script("""() => {
+            page.add_init_script("""(() => {
                 localStorage.setItem('runway_avatar_id', '"""+SAMPLE_ID+"""');
                 window.PhotoAvatarNative = {
                     request(id, action) {
@@ -39,7 +39,7 @@ def run_checks():
                         setTimeout(()=>window.__nativeReply(id,answer),120);
                     }
                 };
-            }""")
+            })()""")
             page.goto(BASE+"index.html",wait_until="load")
             page.locator("#readyCard").wait_for(state="visible")
             page.locator("#consent").check()
