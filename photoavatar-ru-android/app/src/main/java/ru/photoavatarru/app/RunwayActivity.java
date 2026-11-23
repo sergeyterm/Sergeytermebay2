@@ -67,7 +67,7 @@ public final class RunwayActivity extends Activity {
         cfg.setMediaPlaybackRequiresUserGesture(false);
         cfg.setJavaScriptCanOpenWindowsAutomatically(false);
         cfg.setAllowFileAccess(false);
-        cfg.setAllowContentAccess(false);
+        cfg.setAllowContentAccess(true); // User-selected content:// image and audio URIs from Android file picker
         cfg.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         WebView.setWebContentsDebuggingEnabled(false);
 
@@ -233,7 +233,8 @@ public final class RunwayActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (web != null) {
-            web.evaluateJavascript("window.__onAndroidBack && window.__onAndroidBack()",null);
+            web.evaluateJavascript("!!(window.__onAndroidBack && window.__onAndroidBack())",
+                result -> { if (!"true".equals(result)) finish(); });
             return;
         }
         super.onBackPressed();
