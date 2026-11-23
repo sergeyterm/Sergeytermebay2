@@ -75,10 +75,11 @@ final class RunwayApi {
         throw new IOException("Голос ещё обрабатывается в Runway. Повтори действие позднее.");
     }
 
-    String createAvatar(String photoDataUri, String name, String personality, String voiceType, String voiceId) throws Exception {
+    String createAvatar(String photoDataUri, String name, String personality, String voiceType, String voiceId, String imageProcessing) throws Exception {
         requireImageAudioUri(photoDataUri, "image");
         if (name == null || name.trim().isEmpty()) throw new IOException("Укажи имя персонажа");
         if (personality == null || personality.trim().isEmpty()) throw new IOException("Укажи описание персонажа");
+        imageProcessing = validatedProcessing(imageProcessing);
         JSONObject voice = new JSONObject();
         if ("custom".equals(voiceType)) {
             if (!isUuid(voiceId)) throw new IOException("Неверный ID клонированного голоса");
@@ -92,12 +93,39 @@ final class RunwayApi {
         JSONObject body = new JSONObject()
             .put("name", cap(name, 100))
             .put("referenceImage", photoDataUri)
+            .put("imageProcessing", imageProcessing)
             .put("personality", cap(personality, 10000))
             .put("voice", voice);
         JSONObject response = request("POST","/v1/avatars",body,apiKey);
         String id = response.optString("id", "");
         if (!isUuid(id)) throw new IOException("Runway не вернул ID персонажа: " + safeMessage(response));
         return id;
+    }
+
+    /**
+     * Replace only the photo and processing strategy of an existing avatar.
+     * The Runway Avatar ID stays stable. Runway may reprocess this photo.
+     * Call only after an explicit user's confirmation.
+     */
+    JSONObject updateAvatarImage(String avatarId, String photoDataUri, String processing) throws Exception {
+        if (!isUuid(avatarId)) throw new IOException("Неверный ID персонажа Runway");
+        requireImageAudioUri(photoDataUri, "image");
+        JSONObject current = getAvatarStatus(avatarId);
+        if ("PROCESSING".equals(current.optString("status"))) {
+            throw new IOException("Аватар ещё обрабатывается. Дождись READY, прежде чем менять фотографию.");
+        }
+        JSONObject body = new JSONObject()
+            .put("referenceImage",photoDataUri)
+            .put("imageProcessing",validatedProcessing(processing));
+        // PATCH is supported by OkHttp, unlike Android HttpURLConnection.
+        request("PATCH","/v1/avatars/" + avatarId,body,apiKey);
+        return new JSONObject().put("id",avatarId).put("updated",true);
+    }
+
+    private static String validatedProcessing(String value) throws IOException {
+        if (!"optimize".equals(value) && !"none".equals(value))
+            throw new IOException("Неверный режим обработки изображения");
+        return value;
     }
 
     /** Read-only preflight. Runway avatar must reach READY before a billable realtime session. */
@@ -176,6 +204,7 @@ final class RunwayApi {
     }
 
     private JSONObject request(String method, String path, JSONObject body, String bearer) throws Exception {
+        if ("PATCH".equals(method)) return patchRequest(path, body, bearer);
         HttpURLConnection conn = (HttpURLConnection)new URL(ROOT + path).openConnection();
         conn.setRequestMethod(method);
         conn.setConnectTimeout(20000);
@@ -202,6 +231,36 @@ final class RunwayApi {
             if (status < 200 || status >= 300) throw new IOException("Runway HTTP " + status + ": " + safeMessage(data));
             return data;
         } finally { conn.disconnect(); }
+    }
+
+    /**
+     * Android's stock HttpURLConnection throws ProtocolException for PATCH.
+     * Keep the permanent API key in Java, never expose it in WebView JS.
+     */
+    private JSONObject patchRequest(String path, JSONObject body, String bearer) throws Exception {
+        if (body == null) throw new IOException("Отсутствуют данные для обновления персонажа");
+        okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(50, java.util.concurrent.TimeUnit.SECONDS)
+            .build();
+        okhttp3.MediaType type = okhttp3.MediaType.parse("application/json; charset=utf-8");
+        okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(type, body.toString());
+        okhttp3.Request req = new okhttp3.Request.Builder()
+            .url(ROOT + path)
+            .header("Authorization", "Bearer " + bearer)
+            .header("X-Runway-Version", VERSION)
+            .header("Accept", "application/json")
+            .patch(requestBody)
+            .build();
+        try (okhttp3.Response response = client.newCall(req).execute()) {
+            String data = response.body() == null ? "" : response.body().string();
+            if(data.length() > 1_048_576) throw new IOException("Слишком большой ответ от Runway");
+            JSONObject json;
+            try { json = data.isEmpty() ? new JSONObject() : new JSONObject(data); }
+            catch(JSONException ex) { throw new IOException("Runway вернул некорректный JSON (HTTP " + response.code() + ")"); }
+            if(!response.isSuccessful()) throw new IOException("Runway HTTP " + response.code() + ": " + safeMessage(json));
+            return json;
+        }
     }
 
     private static byte[] readBytes(InputStream in, int maximum) throws IOException {
