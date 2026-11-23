@@ -29,12 +29,22 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.UUID;
+import org.json.JSONArray;
+import java.io.ByteArrayInputStream;
 
 /** Single-screen Android shell. All Runway authentication happens in native Java. */
 public final class RunwayActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private static final int FILE_PICKER = 2102, AUDIO_PERMISSION = 2103, CAMERA_PERMISSION = 2104;
+    private static final int PHOTO_PICKER = 2105;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService photoWorker = Executors.newSingleThreadExecutor();
+    private final Map<String, byte[]> importedPhotos = new ConcurrentHashMap<>();
+    private String pendingPhotoRequest;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
     private ValueCallback<Uri[]> pendingFiles;
@@ -85,6 +95,14 @@ public final class RunwayActivity extends Activity {
                 if (!"https".equals(uri.getScheme()) || !"appassets.androidplatform.net".equals(uri.getHost()))
                     return null;
                 String path = uri.getPath();
+                if (path != null && path.startsWith("/import/")) {
+                    String token = path.substring("/import/".length());
+                    byte[] bytes = importedPhotos.get(token);
+                    if (bytes == null) return new WebResourceResponse("text/plain", "UTF-8",
+                        404, "Not Found", java.util.Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
+                    return new WebResourceResponse("image/jpeg", null, 200, "OK",
+                        java.util.Collections.singletonMap("Cache-Control", "no-store"), new ByteArrayInputStream(bytes));
+                }
                 if (path == null || !path.startsWith("/assets/")) return emptyResponse();
                 String name = path.substring("/assets/".length());
                 if (!name.matches("[a-z0-9_.-]+") || name.contains("..") || name.equals("runway.key"))
@@ -148,11 +166,66 @@ public final class RunwayActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        if (requestCode == PHOTO_PICKER) {
+            final String id = pendingPhotoRequest;
+            pendingPhotoRequest = null;
+            if (id == null) return;
+            if (resultCode != RESULT_OK || data == null) {
+                try { deliver(id, success(new JSONObject().put("photos", new JSONArray()).put("errors", new JSONArray()))); }
+                catch (Exception e) { deliver(id, failure(e)); }
+                return;
+            }
+            final List<Uri> uris = PhotoImporter.selectedUris(data);
+            photoWorker.execute(() -> importPhotos(id, uris));
+            return;
+        }
         if (requestCode != FILE_PICKER) return;
         if (pendingFiles != null) {
             pendingFiles.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode,data));
             pendingFiles = null;
         }
+    }
+
+    private void openPhotoPicker(String id) {
+        if (destroyed) return;
+        if (pendingPhotoRequest != null) {
+            deliver(id, failure(new IOException("Выбор фотографий уже открыт")));
+            return;
+        }
+        pendingPhotoRequest = id;
+        importedPhotos.clear();
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try { startActivityForResult(intent, PHOTO_PICKER); }
+        catch (Exception e) {
+            pendingPhotoRequest = null;
+            deliver(id, failure(new IOException("Не удалось открыть галерею или «Мои файлы»", e)));
+        }
+    }
+
+    private void importPhotos(String id, List<Uri> uris) {
+        try {
+            JSONArray photos = new JSONArray(), errors = new JSONArray();
+            int number = 0;
+            for (Uri uri : uris) {
+                number++;
+                try {
+                    byte[] jpeg = PhotoImporter.readJpeg(getContentResolver(), uri);
+                    String token = UUID.randomUUID().toString() + ".jpg";
+                    if (destroyed) return;
+                    importedPhotos.put(token, jpeg);
+                    photos.put(new JSONObject().put("url", ORIGIN + "/import/" + token)
+                        .put("name", "portrait-" + number + ".jpg"));
+                } catch (Exception | OutOfMemoryError e) {
+                    errors.put("Снимок " + number + ": не удалось прочитать. Попробуйте сохранить его в JPEG.");
+                }
+            }
+            if (photos.length() == 0 && errors.length() == 0) errors.put("Галерея не вернула доступных фотографий");
+            deliver(id, success(new JSONObject().put("photos", photos).put("errors", errors)));
+        } catch (Exception e) { deliver(id, failure(e)); }
     }
 
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults) {
@@ -193,9 +266,17 @@ public final class RunwayActivity extends Activity {
     }
 
     public final class NativeApi {
+        @JavascriptInterface public boolean supportsPhotoPicker() { return true; }
         @JavascriptInterface public void request(String id,String action,String raw) {
             if (id == null || id.length()>50 || action == null || action.length()>40 || raw == null || raw.length()>6_000_000)
                 return;
+            if ("pickPhotos".equals(action)) { ui.post(() -> openPhotoPicker(id)); return; }
+            if ("releasePhotos".equals(action)) {
+                importedPhotos.clear();
+                try { deliver(id, success(new JSONObject())); }
+                catch (Exception e) { deliver(id, failure(e)); }
+                return;
+            }
             worker.execute(() -> {
                 try {
                     JSONObject p = new JSONObject(raw);
@@ -299,6 +380,9 @@ public final class RunwayActivity extends Activity {
     @Override protected void onDestroy() {
         destroyed = true;
         worker.shutdownNow();
+        photoWorker.shutdownNow();
+        importedPhotos.clear();
+        pendingPhotoRequest = null;
         if (pendingFiles != null) {pendingFiles.onReceiveValue(null);pendingFiles=null;}
         if (pendingAudio != null) {pendingAudio.deny();pendingAudio=null;}
         if (pendingCamera != null) {pendingCamera.deny();pendingCamera=null;}

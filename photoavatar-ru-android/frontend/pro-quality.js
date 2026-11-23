@@ -4,6 +4,7 @@
  * These functions do not alter eye geometry or claim to reconstruct a 3D face.
  */
 import { makeDetectionImage } from './portrait-crop.js';
+import { openPhotoFile } from './photo-file.js';
 
 function clip(v,min,max){return Math.max(min,Math.min(max,Number.isFinite(v)?v:min));}
 
@@ -68,19 +69,17 @@ export function photoPixelMetrics(image) {
 }
 
 export async function assessFile(file,native) {
-  if(!file||!file.type.startsWith('image/'))throw new Error('Нужен JPEG/PNG/WebP');
-  if(file.size>18_000_000)throw new Error('Файл слишком большой (максимум 18 МБ)');
-  const url=URL.createObjectURL(file);const image=new Image();
+  const loaded=await openPhotoFile(file);
+  const image=loaded.image;
   try {
-    image.src=url;await image.decode();
     const pixels=photoPixelMetrics(image);
     let face=null; let warning='';
-    try {face=await native('detectFace',{photo:makeDetectionImage(image)},35000);}
+    try {face=await native('detectFace',{photo:makeDetectionImage(image)},15000);}
     catch(err){warning='Локальная проверка лица недоступна';}
     const evaluated=qualityFromMetrics({...pixels,face});
     if(warning)evaluated.reasons.unshift(warning);
     return evaluated;
-  }finally{URL.revokeObjectURL(url);}
+  }finally{loaded.dispose();}
 }
 
 function imageFromData(dataUrl) {

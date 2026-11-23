@@ -1,7 +1,7 @@
 {
   "name": "photoavatar-runway-webrtc",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.6.1",
   "type": "module",
   "scripts": {
     "test:crop": "node --test portrait-crop.test.js",

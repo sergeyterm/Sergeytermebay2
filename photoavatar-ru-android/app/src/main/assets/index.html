@@ -173,7 +173,9 @@
       <section class="card">
         <h2>01 · Внешность собеседника</h2>
         <small>Одна фотография или коллаж 3×3. В коллаже выбери фронтальный ракурс — Runway анимирует только эту ячейку, не обучает 3D-модель по девяти фото.</small>
-        <label class="file">Загрузить фотографию / коллаж<input id="photo" type="file" accept="image/*" multiple></label>
+        <button id="nativePhotoPicker" type="button" class="btn alt hidden">Загрузить фотографию / коллаж (до 4)</button>
+        <label class="file" id="browserPhotoPicker">Загрузить фотографию / коллаж<input id="photo" type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp" multiple></label>
+        <div id="photoImportStatus" class="hint" role="status" aria-live="polite">Выбери фото из галереи или «Мои файлы».</div>
         <img id="preview" class="preview" alt="Оригинал выбранной фотографии">
         <div id="photoCandidates" class="hidden">
           <label>Сравнение выбранных фотографий (до 4)</label>

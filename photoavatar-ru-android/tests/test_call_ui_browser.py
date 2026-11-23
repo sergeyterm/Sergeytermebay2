@@ -49,7 +49,7 @@ def run_checks():
                         else if (action === 'startSession') answer={ok:false,error:'Runway HTTP 402: Недостаточно кредитов (тест)'};
                         else if (action === 'cancelSession') answer={ok:true,data:{cancelled:true}};
                         else answer={ok:true,data:{}};
-                        setTimeout(()=>window.__nativeReply(id,answer),120);
+                        setTimeout(()=>window.__nativeReply(id,answer),action==='detectFace'?(window.__faceDelay||120):120);
                     }
                 };
             })()""")
@@ -116,12 +116,20 @@ def run_checks():
                 g.fillStyle='#432d20';g.fillRect(160,1030,560,440);
                 return c.toDataURL('image/jpeg',0.8);
             }""")
+            page.evaluate("""() => {
+                window.__faceDelay=3000;
+                window.__originalDecode=HTMLImageElement.prototype.decode;
+                HTMLImageElement.prototype.decode=function(){return Promise.reject(new Error('decode unavailable'));};
+            }""")
             page.locator("#photo").set_input_files({
                 "name":"synthetic_portrait.jpg","mimeType":"image/jpeg",
                 "buffer":base64.b64decode(data_url.split(",",1)[1])
             })
-            page.wait_for_function("document.querySelector('#preparedPreview').src.startsWith('data:image/jpeg;base64,')",timeout=15000)
+            page.wait_for_function("document.querySelector('#preparedPreview').src.startsWith('data:image/jpeg;base64,')",timeout=2500)
+            assert page.locator("#preview").is_visible(), "preview must not wait for detector"
+            page.evaluate("""() => {window.__faceDelay=120;HTMLImageElement.prototype.decode=window.__originalDecode;}""")
             page.wait_for_function("document.querySelector('#faceStatus').textContent.includes('Лицо найдено')",timeout=15000)
+            page.wait_for_function("!document.querySelector('#photo').disabled",timeout=15000)
             assert page.locator("#photoTools").is_visible()
             assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalWidth") == 1088
             assert page.locator("#preparedPreview").evaluate("(el)=>el.naturalHeight") == 704

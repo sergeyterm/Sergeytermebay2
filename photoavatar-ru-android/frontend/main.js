@@ -1,6 +1,7 @@
 import { streamTo, AvatarEvent } from '@runwayml/avatars';
 import { composePortrait, makeDetectionImage } from './portrait-crop.js';
 import { createProController } from './pro-controller.js';
+import { openPhotoFile } from './photo-file.js';
 
 const $ = (id) => document.getElementById(id);
 const pending = new Map();
@@ -109,15 +110,12 @@ function asDataUrl(file) {
   });
 }
 
-async function loadImage(file) {
-  if (!file || !file.type.startsWith('image/')) throw new Error('Выбери фотографию JPEG или PNG.');
-  if (file.size > 18 * 1024 * 1024) throw new Error('Для фотографии допускается файл не более 18 МБ.');
-  if (imageUrl) URL.revokeObjectURL(imageUrl);
-  imageUrl = URL.createObjectURL(file);
-  const img = new Image();
-  img.src = imageUrl;
-  await img.decode();
-  image = img;
+async function loadImage(file,{analyze=true}={}) {
+  const loaded=await openPhotoFile(file);
+  if(imageUrl&&imageUrl.startsWith('blob:'))URL.revokeObjectURL(imageUrl);
+  imageUrl=loaded.url;
+  image=loaded.image;
+  ++detectionToken;
   activeTile = -1;
   currentFace = null;
   preparedImage = '';
@@ -131,7 +129,8 @@ async function loadImage(file) {
   $('photoHint').textContent = 'Выбран полный кадр. Для коллажа 3×3 нажми на один фронтальный ракурс ниже.';
   drawTiles();
   if(proController)proController.photoUpdated();
-  await detectFaceAndRender();
+  refreshPreparedPreview();
+  if(analyze)await detectFaceAndRender();
 }
 
 function drawTiles() {
@@ -164,15 +163,61 @@ function drawTiles() {
   }
 }
 
+let photoImportBusy=false;
+const photoImportNote=message=>{$('photoImportStatus').textContent=message;};
+function setPhotoImportBusy(value){
+  photoImportBusy=value;
+  $('nativePhotoPicker').disabled=value;
+  $('photo').disabled=value;
+}
+async function importSelectedFiles(files,warnings=[]){
+  if(!files.length){
+    photoImportNote(warnings.length?warnings.join(' · '):'Выбор отменён. Текущая фотография сохранена.');
+    return;
+  }
+  photoImportNote('Читаю фото. Предпросмотр появится до окончания проверки лица…');
+  if(proController)await proController.chooseFiles(files);
+  else await loadImage(files[0]);
+  photoImportNote('✓ Фотографии загружены.'+(warnings.length?' '+warnings.join(' · '):''));
+  status('Фотографии проверены. Выбери лучший кадр и при необходимости открой Pro Quality.');
+}
 $('photo').addEventListener('change',async(e)=>{
-  try {
-    const files=Array.from(e.target.files || []);
-    if(!files.length)return;
-    if(proController)await proController.chooseFiles(files);
-    else await loadImage(files[0]);
-    status('Фотографии проверены. Выбери лучший кадр и при необходимости открой Pro Quality.');
-  }catch(ex){labelError(ex);}
+  const files=Array.from(e.target.files||[]).slice(0,4);
+  e.target.value='';
+  if(!files.length||photoImportBusy)return;
+  setPhotoImportBusy(true);
+  try{await importSelectedFiles(files);}
+  catch(ex){photoImportNote('Не удалось загрузить фото: '+ex.message);labelError(ex);}
+  finally{setPhotoImportBusy(false);}
 });
+if(typeof window.PhotoAvatarNative?.supportsPhotoPicker==='function'&&window.PhotoAvatarNative.supportsPhotoPicker()){
+  $('nativePhotoPicker').classList.remove('hidden');
+  $('browserPhotoPicker').classList.add('hidden');
+}
+$('nativePhotoPicker').onclick=async()=>{
+  if(photoImportBusy)return;
+  setPhotoImportBusy(true);
+  photoImportNote('Открываю системный выбор фотографий…');
+  try{
+    const result=await native('pickPhotos',{},600000);
+    const warnings=Array.isArray(result.errors)?result.errors.slice():[];
+    const files=[];
+    try{
+      for(const photo of (result.photos||[]).slice(0,4)){
+        try{
+          if(typeof photo.url!=='string'||!photo.url.startsWith(location.origin+'/import/'))throw new Error('Неверный источник');
+          const response=await fetch(photo.url,{cache:'no-store'});
+          if(!response.ok)throw new Error('Файл недоступен');
+          const blob=await response.blob();
+          if(!blob.size)throw new Error('Пустой файл');
+          files.push(new File([blob],photo.name||'portrait.jpg',{type:'image/jpeg'}));
+        }catch(err){warnings.push('Снимок не прочитан: '+err.message);}
+      }
+    }finally{try{await native('releasePhotos',{},5000);}catch(err){}}
+    await importSelectedFiles(files,warnings);
+  }catch(ex){photoImportNote('Не удалось загрузить фото: '+ex.message);labelError(ex);}
+  finally{setPhotoImportBusy(false);}
+};
 $('useFull').onclick=()=> {
   activeTile=-1;
   drawTiles();
@@ -729,7 +774,7 @@ proController=createProController({
     updateReady();
     status('Персонаж выбран из истории. Он готов к проверке статуса Runway.');
   },
-  loadImage,getPersona:personaText,
+  loadImage,detectFaceAndRender,getPersona:personaText,
   getName:()=>$('name').value.trim()||'Собеседник',
   getVoice:()=>{
     if($('voiceMode').value==='custom')return {type:'custom',id:UUID.test($('voiceId').value.trim())?

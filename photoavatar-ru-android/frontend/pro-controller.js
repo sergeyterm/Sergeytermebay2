@@ -5,7 +5,7 @@ import { addHistory,listHistory,deleteHistory,makeThumb,getHistory } from './ava
 export function createProController(hooks) {
   const {
     native, status, setBusy, isBusy, getImage, getFace, getPrepared,
-    getAvatarId, setAvatarId, loadImage, inCall, getPersona, getName,
+    getAvatarId, setAvatarId, loadImage, detectFaceAndRender, inCall, getPersona, getName,
     getVoice, getProcessing, setProcessing, getConsent, setAvatarPreview
   }=hooks;
   const $=id=>document.getElementById(id);
@@ -37,32 +37,41 @@ export function createProController(hooks) {
   async function chooseFiles(fileList) {
     const files=Array.from(fileList||[]).slice(0,4);
     if(!files.length)return;
-    state.photos=[];state.variants=[];state.selected=null;
+    state.photos=[];
     $('photoCandidates').classList.remove('hidden');
     $('bestShotList').replaceChildren();
-    note('bestShotStatus','Анализирую фотографии локально: 0/'+files.length);
-    let index=0;
-    for(const file of files) {
-      index++;
-      try {
-        const result=await assessFile(file,native);
-        state.photos.push({file,result});
-      }catch(err) {
-        state.photos.push({file,result:{score:0,label:'Не подходит',reasons:[err.message]}});
-      }
-      note('bestShotStatus','Анализирую фотографии локально: '+index+'/'+files.length);
+    note('bestShotStatus','Читаю снимки…');
+    let first=null;
+    for(const file of files){
+      try{await loadImage(file,{analyze:false});first=file;break;}catch(err){}
+    }
+    if(!first)throw new Error('Нет читаемых изображений. Выбери JPEG, PNG или WEBP.');
+    if(files.length===1){
+      await detectFaceAndRender();
+      const result=state.quality||{score:0,label:'Предпросмотр готов',reasons:[]};
+      state.photos=[{file:first,result,selected:true}];
+      renderPhotos();
+      note('bestShotStatus','Снимок загружен. Можно подготовить три варианта.');
+      return;
+    }
+    for(const file of files){
+      try{const result=await assessFile(file,native);state.photos.push({file,result,selected:file===first});}
+      catch(err){state.photos.push({file,invalid:true,result:{score:0,label:'Не читается',reasons:[err.message]}});}
+      note('bestShotStatus','Проверено '+state.photos.length+'/'+files.length+'. Предпросмотр уже доступен.');
       renderPhotos();
     }
-    const best=state.photos.reduce((a,b)=>b.result.score>a.result.score?b:a,state.photos[0]);
-    await activateFile(best);
+    const valid=state.photos.filter(p=>!p.invalid);
+    if(!valid.length)throw new Error('Не удалось оценить снимки. Предпросмотр первого читаемого кадра сохранён.');
+    const best=valid.reduce((a,b)=>b.result.score>a.result.score?b:a,valid[0]);
+    if(best.file===first){await detectFaceAndRender();renderPhotos();updateQuality();}
+    else await activateFile(best);
     note('bestShotStatus','Рекомендован снимок №'+(state.photos.indexOf(best)+1)+' ('+best.result.score+'/100). Можно выбрать любой вручную.');
   }
-
-  async function activateFile(item) {
-    for(const photo of state.photos){photo.selected=photo===item;}
+  async function activateFile(item){
+    if(item.invalid)return;
     await loadImage(item.file);
-    renderPhotos();
-    updateQuality();
+    for(const photo of state.photos)photo.selected=photo===item;
+    renderPhotos();updateQuality();
   }
   function renderPhotos() {
     const grid=$('bestShotList');grid.replaceChildren();
@@ -75,6 +84,7 @@ export function createProController(hooks) {
       const title=e('strong','Снимок '+(i+1)+' · '+item.result.score+'/100');
       const subtitle=e('small',item.result.label);
       const button=e('button',item.selected?'Выбран':'Выбрать');
+      button.disabled=!!item.invalid;
       button.onclick=()=>activateFile(item).catch(ex=>status(ex.message,true));
       card.append(img,title,subtitle,button);grid.append(card);
     });
