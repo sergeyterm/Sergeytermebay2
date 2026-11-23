@@ -53,6 +53,20 @@ def run_checks():
             page.locator("#consent").check()
             page.locator("#startCall").click()
             page.locator("#callScreen").wait_for(state="visible")
+            # Regression: video is ready before the SDK's late AvatarVideoReady listener.
+            # The player must react to its own playback events.
+            page.evaluate("""() => {
+                const v = document.querySelector('#avatarVideo');
+                Object.defineProperties(v, {
+                    srcObject: {configurable:true,get:()=>({getVideoTracks:()=>[{readyState:'live'}]})},
+                    videoWidth: {configurable:true,get:()=>640},
+                    videoHeight: {configurable:true,get:()=>480},
+                    readyState: {configurable:true,get:()=>3}
+                });
+                v.dispatchEvent(new Event('playing'));
+            }""")
+            page.wait_for_function("getComputedStyle(document.querySelector('#avatarVideo')).opacity === '1'",timeout=4000)
+            assert page.locator("#avatarVideo").evaluate("(v) => v.classList.contains('playing')"), "video must display despite missed SDK event"
             for control in ["speaker","selfCamera","mute","hangup"]:
                 assert page.locator("#"+control).is_visible(), f"{control} invisible at {width}"
             assert page.locator("#selfTile").is_visible(), "self camera tile missing"
@@ -63,6 +77,7 @@ def run_checks():
             assert page.locator("#callName").inner_text().strip(), "call name absent"
             assert page.locator("#callTime").inner_text() == "00:00", "call duration not initialized"
             page.locator("#callError").wait_for(state="visible",timeout=12000)
+            assert page.locator("#avatarVideo").evaluate("(v) => !v.classList.contains('playing')"), "failure should hide stale video"
             assert "Недостаточно кредитов" in page.locator("#callErrorMessage").inner_text()
             calls=page.evaluate("window.__calls")
             assert calls.count("avatarStatus")>=2, "must poll until READY"

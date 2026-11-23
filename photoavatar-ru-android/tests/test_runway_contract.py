@@ -59,6 +59,10 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('video:false', CLIENT)
         self.assertIn('session.attachAudio',CLIENT)
         self.assertIn('AvatarEvent.LocalVideoReady',CLIENT)
+        self.assertIn('installRemoteVideoListeners()',CLIENT)
+        self.assertIn('revealRemoteVideo()',CLIENT)
+        self.assertIn("video.addEventListener(event",CLIENT)
+        self.assertIn('startRemoteVideoProbe()',CLIENT)
         self.assertIn('id="avatarVideo" autoplay muted playsinline',HTML)
         for token in ['streamTo({credentials:', 'AvatarEvent.Transcript',
                       'currentCall.mic.toggle()', 'oldCall.end()',
