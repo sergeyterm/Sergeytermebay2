@@ -129,6 +129,38 @@
 .replace-avatar h3{font-size:14px;margin:0 0 7px}
 .replace-avatar p{color:var(--secondary);font-size:12px;margin:0 0 9px;line-height:1.5}
 @media(max-width:450px){.crop-controls{grid-template-columns:1fr}}
+
+/* Optional Pro Quality controls: compact, mobile-first, original design. */
+.pro-heading{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pro-heading::-webkit-details-marker{display:none}
+.pro-heading strong{display:block;font-size:17px;color:var(--text)}
+.pro-heading small{display:block;margin:3px 0 0;color:var(--secondary);font-size:11px;font-weight:400}
+.pro-spark{font-size:25px;color:var(--green)}
+.pro-body{padding:16px 0 1px}
+.pro-body .btn{margin-top:8px}
+.pro-body label{margin-top:14px}
+.pro-body input[type="range"]{display:block;width:100%;height:30px;accent-color:var(--green)}
+.quality-score{border:1px solid var(--border);background:#081c24;border-radius:14px;padding:13px;color:#ddf7ee;font-size:13px;margin:12px 0}
+.quality-shots,.quality-variants{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.quality-item{background:#09222c;border:1px solid #345463;border-radius:14px;overflow:hidden;padding:9px;min-width:0}
+.quality-item.selected{border:2px solid var(--green);padding:8px}
+.quality-item img{display:block;width:100%;aspect-ratio:1.55;object-fit:cover;border-radius:9px;background:#1c353a}
+.quality-item strong{display:block;font-size:12px;margin-top:7px}
+.quality-item small{display:block;color:var(--secondary);font-size:11px;line-height:1.3;margin:2px 0 7px}
+.quality-item button{min-height:36px;border:0;border-radius:9px;color:#06271d;background:#42ddb3;width:100%;font-weight:750;font-size:12px}
+.subdetails{border-top:1px solid var(--border);padding-top:12px;margin-top:19px}
+.subdetails summary{font-weight:700;cursor:pointer;font-size:14px;padding:9px 0}
+.quality-history-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:20px 0 10px}
+.quality-history-head strong{font-size:14px}
+.quality-history-head button{width:auto;min-width:95px;min-height:38px!important;font-size:12px}
+.quality-history{max-height:400px;overflow:auto;display:grid;gap:9px}
+.quality-history-item{display:grid;grid-template-columns:66px 1fr;gap:11px;padding:10px;border:1px solid var(--border);border-radius:14px;background:#0c2530}
+.quality-history-item img{width:66px;height:75px;border-radius:9px;object-fit:cover;background:#12313a}
+.quality-history-item strong{display:block;font-size:13px}
+.quality-history-item small{display:block;color:var(--secondary);font-size:11px;overflow-wrap:anywhere}
+.quality-history-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.quality-history-actions button{padding:6px 9px;min-height:31px;background:#214a52;color:white;border:1px solid #3b6770;border-radius:9px;font-size:11px}
+@media(max-width:370px){.quality-shots,.quality-variants{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -141,8 +173,13 @@
       <section class="card">
         <h2>01 · Внешность собеседника</h2>
         <small>Одна фотография или коллаж 3×3. В коллаже выбери фронтальный ракурс — Runway анимирует только эту ячейку, не обучает 3D-модель по девяти фото.</small>
-        <label class="file">Загрузить фотографию / коллаж<input id="photo" type="file" accept="image/*"></label>
+        <label class="file">Загрузить фотографию / коллаж<input id="photo" type="file" accept="image/*" multiple></label>
         <img id="preview" class="preview" alt="Оригинал выбранной фотографии">
+        <div id="photoCandidates" class="hidden">
+          <label>Сравнение выбранных фотографий (до 4)</label>
+          <div id="bestShotList" class="quality-shots"></div>
+          <div id="bestShotStatus" class="hint" role="status"></div>
+        </div>
         <div id="photoTools" class="hidden">
           <div class="hint" id="faceStatus" role="status">Проверяю лицо на фотографии…</div>
           <label for="preparedPreview">Как фотография будет отправлена в Runway (1088×704)</label>
@@ -160,6 +197,7 @@
         <select id="processingMode">
           <option value="optimize">Optimize — оптимизация Runway (рекомендуется)</option>
           <option value="none">None — без дополнительной оптимизации Runway, для сравнения</option>
+          <option value="enhanced">Enhanced — подготовленный Pro Quality портрет + Runway none</option>
         </select>
         <div class="hint">«None» может точнее сохранять исходные черты лица, но Runway не гарантирует качество анимации. Режим применяется при создании или замене фото аватара.</div>
         <div id="tileBlock" class="hidden">
@@ -168,6 +206,42 @@
           <button class="btn alt" id="useFull">Использовать полный портрет</button>
         </div>
         <div class="hint" id="photoHint">Для большей реалистичности используй качественный портрет, лицо прямо в камеру.</div>
+      </section>
+
+      <section class="card" id="proQualitySection">
+        <details id="proQualityDetails">
+          <summary class="pro-heading">
+            <span><strong>Pro Quality</strong><small>Улучшение лица и глаз · выбор лучшего кадра</small></span>
+            <span class="pro-spark">✧</span>
+          </summary>
+          <div class="pro-body">
+            <p class="hint">Подготовка и предварительный просмотр бесплатны. Платные операции CodeFormer и создание нескольких аватаров запускаются только вручную.</p>
+            <div id="qualitySummary" class="quality-score">Загрузи фотографию для проверки качества.</div>
+            <button id="qualityAudit" class="btn alt">Проверить лицо и глаза</button>
+            <label for="qualityEyeDetail">Мягкая детализация глаз (без изменения формы)</label>
+            <input id="qualityEyeDetail" type="range" min="0" max="0.65" step="0.05" value="0.2">
+            <div class="hint" id="qualityEyeStatus">Глаза остаются естественными. Не рекомендуется чрезмерная резкость.</div>
+            <button id="generateVariants" class="btn" style="margin-top:12px">Подготовить 3 варианта портрета</button>
+            <div class="hint" id="selectedVariantStatus">По умолчанию используется обычный портрет.</div>
+            <div class="quality-variants" id="variantsGrid"></div>
+            <details class="subdetails" id="codeFormerDetails">
+              <summary>CodeFormer AI — дополнительная реставрация лица</summary>
+              <p class="hint">Нужен отдельный API-токен Replicate. Исходный портрет будет отправлен Replicate только после нажатия кнопки. Платная операция, может менять индивидуальные черты.</p>
+              <label for="replicateToken">Replicate API-токен</label>
+              <input id="replicateToken" type="password" autocomplete="off" placeholder="r8_…">
+              <div class="buttons" style="margin-top:9px">
+                <button id="saveReplicateToken" class="btn alt">Подключить</button>
+                <button id="clearReplicateToken" class="btn alt">Удалить токен</button>
+              </div>
+              <div id="codeformerState" class="hint" aria-live="polite">Проверяю подключение…</div>
+              <label for="codeformerFidelity">Сохранение сходства (fidelity)</label>
+              <input id="codeformerFidelity" type="range" min="0.65" max="0.95" step="0.05" value="0.8">
+              <label class="switch-row"><input id="codeformerConsent" type="checkbox"><span>Разрешаю передать портрет в Replicate и согласен на возможную оплату CodeFormer.</span></label>
+              <button id="runCodeFormer" class="btn alt">Улучшить портрет через CodeFormer</button>
+              <div class="hint">Результат появится среди вариантов портрета. Без Replicate эта функция недоступна; остальные инструменты работают локально.</div>
+            </details>
+          </div>
+        </details>
       </section>
 
       <section class="card">
@@ -233,6 +307,23 @@
           <button class="btn alt" id="replaceAvatarImage" style="margin-top:10px">Заменить фото существующего аватара</button>
         </div>
         <div class="hint">Одна сессия Runway Characters — до пяти минут. При повторном звонке создаётся новая сессия.</div>
+      </section>
+
+      <section class="card" id="avatarVersionsSection">
+        <details id="avatarVersionsDetails">
+          <summary class="pro-heading"><span><strong>Версии и сравнение</strong><small>До трёх реальных аватаров Runway · история на телефоне</small></span><span class="pro-spark">▤</span></summary>
+          <div class="pro-body">
+            <p class="hint">Можно бесплатно подготовить три изображения выше. Создание 2–3 отдельных персонажей в Runway может расходовать дополнительные кредиты.</p>
+            <label for="qualityGenerateCount">Сколько настоящих аватаров создать?</label>
+            <select id="qualityGenerateCount"><option value="2">2 варианта</option><option value="3">3 варианта</option></select>
+            <label class="switch-row"><input id="qualityGenerateConsent" type="checkbox"><span>Я подтверждаю создание нескольких платных персонажей Runway.</span></label>
+            <button id="generateAvatarCandidates" class="btn alt">Создать 2–3 аватара в Runway</button>
+            <div id="variantBatchStatus" class="hint" role="status"></div>
+            <div class="quality-history-head"><strong>История аватаров</strong><button id="refreshHistory" class="btn alt">Обновить</button></div>
+            <div class="quality-history" id="historyList"><p class="hint">История пока пуста.</p></div>
+            <div class="hint" id="historyStatus">История сохраняется только на этом телефоне. Для отката изображения существующего Avatar ID потребуется повторная обработка в Runway.</div>
+          </div>
+        </details>
       </section>
     </div>
   </section>
