@@ -21,3 +21,10 @@ android {
         }
     }
 }
+
+dependencies {
+    // Bundled on-device face detection: works without network or Play Services download.
+    implementation 'com.google.mlkit:face-detection:16.1.7'
+    // Android's HttpURLConnection does not support PATCH; use OkHttp for avatar updates.
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}
