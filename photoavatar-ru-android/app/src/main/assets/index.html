@@ -109,6 +109,11 @@
   
 #avatarVideo{width:100%;height:100%;object-fit:cover;display:block;background:#0b141a}
 #avatarAudio{display:none}
+
+.call-photo-fallback{flex-shrink:0;display:grid;place-items:center;background:#23434a;color:#c4e8e2;font-size:24px}
+.call-state-line{display:flex;gap:6px;align-items:center;min-width:0}
+#callState{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.call-time{flex-shrink:0;margin-left:0}
   </style>
 </head>
 <body>
@@ -195,7 +200,8 @@
     <header class="call-topbar">
       <button id="callBack" class="call-icon-btn" aria-label="Завершить видеозвонок и вернуться"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
       <div class="call-identity">
-        <img id="callPhoto" class="call-profile" alt="Фото собеседника">
+        <img id="callPhoto" class="call-profile hidden" alt="Фото собеседника">
+        <span id="callPhotoFallback" class="call-profile call-photo-fallback" aria-hidden="true">●</span>
         <div style="min-width:0">
           <div class="call-contact-name" id="callName">Собеседник</div>
           <div class="call-state-line"><span id="callState">Соединение…</span><span class="call-time" id="callTime">00:00</span></div>

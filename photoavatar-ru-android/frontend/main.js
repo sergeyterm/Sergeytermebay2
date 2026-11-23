@@ -348,7 +348,8 @@ function showCallFailure(error, stage) {
   setCallState('Не удалось подключиться');
   $('connecting').classList.add('hidden');
   $('callError').classList.remove('hidden');
-  $('callDiagnostics').classList.remove('hidden');
+  // Keep advanced diagnostics behind the info button; show the readable error card.
+  $('callDiagnostics').classList.add('hidden');
   status(lastCallError,true);
 }
 window.__onAndroidBack=()=>{if(inCall){endCall();return true;}return false;};
@@ -386,7 +387,14 @@ $('startCall').onclick = async () => {
   $('mute').setAttribute('aria-pressed','true');
   $('micLabel').textContent='Микрофон';
   $('callName').textContent=$('name').value.trim() || 'Собеседник';
-  if(imageUrl)$('callPhoto').src=imageUrl;
+  if(imageUrl){
+    $('callPhoto').src=imageUrl;
+    $('callPhoto').classList.remove('hidden');
+    $('callPhotoFallback').classList.add('hidden');
+  } else {
+    $('callPhoto').classList.add('hidden');
+    $('callPhotoFallback').classList.remove('hidden');
+  }
   $('transcript').replaceChildren();
   $('callScreen').classList.add('active');
   $('connecting').classList.remove('hidden');

@@ -53,7 +53,11 @@ def run_checks():
             assert page.locator("#callTime").inner_text() == "00:00", "call duration not initialized"
             page.locator("#callError").wait_for(state="visible",timeout=12000)
             assert "Недостаточно кредитов" in page.locator("#callErrorMessage").inner_text()
+            assert not page.locator("#callDiagnostics").is_visible()
+            page.locator("#callInfo").click()
             assert page.locator("#callDiagnostics").is_visible()
+            page.locator("#callInfo").click()
+            assert not page.locator("#callDiagnostics").is_visible()
             assert page.locator("#callErrorStage").inner_text().startswith("Этап:")
             assert page.locator("#callScreen").is_visible(), "Failure overlay should not disappear automatically"
             screenshot=ROOT / ("ui-whatsapp-call-error-%d.png" % width)
