@@ -124,14 +124,9 @@ final class RunwayApi {
             if (i < 59) Thread.sleep(1000);
         }
         if (sessionKey == null || sessionKey.isEmpty()) throw new IOException("Runway не подготовил видеосвязь за 60 секунд.");
-        // The consume token is one-time and is NOT the long-lived Dev API key.
-        JSONObject creds = request("POST", "/v1/realtime_sessions/" + sessionId + "/consume", null, sessionKey);
-        String url = creds.optString("url","");
-        String token = creds.optString("token","");
-        if (!url.startsWith("wss://") || token.isEmpty()) throw new IOException("Runway не вернул WebRTC-данные");
-        return new JSONObject().put("sessionId",sessionId)
-            .put("serverUrl",url).put("token",token)
-            .put("roomName",creds.optString("roomName",""));
+        // Core @runwayml/avatars v0.17 consumes the one-time session key itself.
+        // Calling /consume here would invalidate that key before WebRTC connects.
+        return new JSONObject().put("sessionId", sessionId).put("sessionKey", sessionKey);
     }
 
     /** Stop remote processing after hangup; no new paid session is created. */
@@ -158,6 +153,8 @@ final class RunwayApi {
     private static String safeMessage(JSONObject json) {
         JSONObject err = json.optJSONObject("error");
         if (err != null) return cap(err.optString("message",err.optString("description","Ошибка API")),240);
+        String failure = json.optString("failure","");
+        if (!failure.isEmpty()) return cap(failure,240);
         String errString = json.optString("error","");
         if (!errString.isEmpty()) return cap(errString,240);
         return cap(json.optString("message","Ошибка API Runway"),240);
