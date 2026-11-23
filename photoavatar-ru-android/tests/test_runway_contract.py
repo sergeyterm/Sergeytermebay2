@@ -34,6 +34,17 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('Thread.sleep(1000)',RUNWAY)
         self.assertIn('Thread.sleep(2000)',RUNWAY)
         self.assertIn('getAvatarStatus(String avatarId)',RUNWAY)
+        self.assertIn('updateAvatarImage(String avatarId',RUNWAY)
+        self.assertIn('request("PATCH","/v1/avatars/" + avatarId',RUNWAY)
+        self.assertIn('validatedProcessing(processing)',RUNWAY)
+        self.assertIn('"imageProcessing"',RUNWAY)
+        self.assertIn('case "updateAvatarImage":',ACTIVITY)
+        self.assertIn('case "detectFace":',ACTIVITY)
+        self.assertIn('com.google.mlkit:face-detection:16.1.7',(ROOT/'app/build.gradle').read_text())
+        self.assertIn("import { composePortrait, makeDetectionImage } from './portrait-crop.js';",CLIENT)
+        for ident in ('preparedPreview','photoTools','faceStatus','portraitZoom','portraitVertical',
+                      'processingMode','replaceAvatarImage','replaceAvatarConsent'):
+            self.assertIn(f'id="{ident}"',HTML)
         self.assertIn('"/v1/avatars/" + avatarId',RUNWAY)
         self.assertIn('case "avatarStatus":',ACTIVITY)
         self.assertIn("'avatarStatus'", CLIENT)
@@ -87,7 +98,7 @@ class RunwayContracts(unittest.TestCase):
         data=(ROOT/'app/build.gradle').read_text()
         self.assertRegex(data,r'compileSdk\s+35')
         self.assertRegex(data,r'minSdk\s+26')
-        self.assertIn("versionName '1.4.1'",data)
+        self.assertIn("versionName '1.5.0'",data)
 
 if __name__=='__main__':
     unittest.main()
