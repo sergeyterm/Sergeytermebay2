@@ -116,7 +116,7 @@ jobs:
             adb install -r smoke-apk/app-debug.apk
             adb logcat -c
             sleep 6
-            adb shell am start -W -n ru.photoavatarru.app/.MainActivity | tee launch.txt
+            adb shell am start -W -n ru.photoavatarru.app/.RunwayActivity | tee launch.txt
             grep -q 'Status: ok' launch.txt
             sleep 5
             adb shell pidof ru.photoavatarru.app | tee pid.txt
