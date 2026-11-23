@@ -131,7 +131,14 @@ final class ReplicateCodeFormer {
       opts.inPreferredConfig=Bitmap.Config.ARGB_8888;
       Bitmap bmp=BitmapFactory.decodeByteArray(bytes,0,bytes.length,opts);
       if(bmp==null)throw new IOException("Результат CodeFormer не является изображением");
-      Bitmap resized=Bitmap.createScaledBitmap(bmp,1088,704,true);
+      // CodeFormer may return different dimensions. Preserve aspect ratio rather than stretch facial geometry.
+      float scale=Math.min(1088f/bmp.getWidth(),704f/bmp.getHeight());
+      int w=Math.max(1,Math.round(bmp.getWidth()*scale)),h=Math.max(1,Math.round(bmp.getHeight()*scale));
+      Bitmap resized=Bitmap.createBitmap(1088,704,Bitmap.Config.ARGB_8888);
+      android.graphics.Canvas canvas=new android.graphics.Canvas(resized);
+      canvas.drawColor(0xff25383e);
+      android.graphics.Rect target=new android.graphics.Rect((1088-w)/2,(704-h)/2,(1088-w)/2+w,(704-h)/2+h);
+      canvas.drawBitmap(bmp,null,target,new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
       ByteArrayOutputStream output=new ByteArrayOutputStream();
       resized.compress(Bitmap.CompressFormat.JPEG,90,output);
       if(resized!=bmp) resized.recycle();

@@ -69,7 +69,7 @@ export function createProController(hooks) {
     note('bestShotStatus','Рекомендован снимок №'+(state.photos.indexOf(best)+1)+' ('+best.result.score+'/100). Можно выбрать любой вручную.');
   }
   async function activateFile(item){
-    if(item.invalid)return;
+    if(item.invalid||!state.photos.includes(item))return;
     await loadImage(item.file);
     for(const photo of state.photos)photo.selected=photo===item;
     renderPhotos();updateQuality();

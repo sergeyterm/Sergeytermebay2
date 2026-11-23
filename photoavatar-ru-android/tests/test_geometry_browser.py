@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real local MediaPipe inference and application geometry controls; no provider calls."""
 from pathlib import Path
+import shutil
 from playwright.sync_api import sync_playwright
 import mimetypes
 import base64
@@ -11,7 +12,7 @@ FIXTURE=ROOT/'app/src/androidTest/assets/portrait.jpg'
 BASE='https://appassets.androidplatform.net/assets/'
 def run():
     with sync_playwright() as pw:
-        browser=pw.chromium.launch(headless=True,args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
+        browser=pw.chromium.launch(headless=True,executable_path=shutil.which('google-chrome') or shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
         page=browser.new_page(viewport={'width':390,'height':844})
         errors=[]
         page.on('pageerror',lambda err:errors.append(str(err)))

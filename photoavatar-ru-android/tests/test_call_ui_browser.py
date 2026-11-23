@@ -3,6 +3,7 @@
 All Runway native actions are intercepted. No remote API or paid calls.
 """
 from pathlib import Path
+import shutil
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,7 +13,7 @@ SAMPLE_ID = "11111111-1111-4111-8111-111111111111"
 
 def run_checks():
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+        browser = playwright.chromium.launch(headless=True, executable_path=shutil.which("google-chrome") or shutil.which("chromium"), args=["--no-sandbox"])
         for width, height in [(390, 844), (720, 740)]:
             context = browser.new_context(viewport={"width": width, "height": height})
             page = context.new_page()
