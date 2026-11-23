@@ -121,6 +121,14 @@
 #avatarVideo{position:absolute;inset:0;z-index:1;background:transparent!important;opacity:0;transition:opacity .35s ease}
 #avatarVideo.playing{opacity:1}
 .video-surface:after{z-index:2}
+
+.prepared-preview{display:block;width:100%;max-height:285px;aspect-ratio:1088/704;object-fit:contain;border:1px solid #42646c;border-radius:14px;background:#263941;margin-top:9px}
+.crop-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:10px}
+.crop-controls input[type="range"]{width:100%;accent-color:var(--green);cursor:pointer;height:28px;margin:0}
+.replace-avatar{border-top:1px solid var(--border);margin-top:17px;padding-top:12px}
+.replace-avatar h3{font-size:14px;margin:0 0 7px}
+.replace-avatar p{color:var(--secondary);font-size:12px;margin:0 0 9px;line-height:1.5}
+@media(max-width:450px){.crop-controls{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -134,7 +142,26 @@
         <h2>01 · Внешность собеседника</h2>
         <small>Одна фотография или коллаж 3×3. В коллаже выбери фронтальный ракурс — Runway анимирует только эту ячейку, не обучает 3D-модель по девяти фото.</small>
         <label class="file">Загрузить фотографию / коллаж<input id="photo" type="file" accept="image/*"></label>
-        <img id="preview" class="preview" alt="Выбранный портрет">
+        <img id="preview" class="preview" alt="Оригинал выбранной фотографии">
+        <div id="photoTools" class="hidden">
+          <div class="hint" id="faceStatus" role="status">Проверяю лицо на фотографии…</div>
+          <label for="preparedPreview">Как фотография будет отправлена в Runway (1088×704)</label>
+          <img id="preparedPreview" class="prepared-preview" alt="Результат кадрирования без изменения черт лица">
+          <div class="crop-controls">
+            <div><label for="portraitZoom">Масштаб лица</label>
+              <input id="portraitZoom" type="range" min="0.8" max="1.5" value="1" step="0.05"></div>
+            <div><label for="portraitVertical">Выше / ниже</label>
+              <input id="portraitVertical" type="range" min="-0.3" max="0.3" value="0" step="0.025"></div>
+          </div>
+          <button class="btn alt" id="redetectFace" style="margin-top:9px">Заново определить лицо</button>
+          <div class="hint">ML Kit ищет лицо прямо на телефоне. Если лицо не найдено, можно настроить масштаб и положение вручную. Форма лица не растягивается.</div>
+        </div>
+        <label for="processingMode">Как Runway должен обрабатывать внешность</label>
+        <select id="processingMode">
+          <option value="optimize">Optimize — оптимизация Runway (рекомендуется)</option>
+          <option value="none">None — без дополнительной оптимизации Runway, для сравнения</option>
+        </select>
+        <div class="hint">«None» может точнее сохранять исходные черты лица, но Runway не гарантирует качество анимации. Режим применяется при создании или замене фото аватара.</div>
         <div id="tileBlock" class="hidden">
           <label>Ракурс из сетки 3×3</label>
           <div class="tile-grid" id="tiles"></div>
@@ -196,6 +223,15 @@
         <small id="readyId"></small>
         <button class="btn" id="startCall">📞 Начать видеозвонок</button>
         <button class="btn alt" id="resetAvatar" style="margin-top:9px">Создать другого персонажа</button>
+        <div class="replace-avatar">
+          <h3>Улучшить фотографию этого персонажа</h3>
+          <p>Можно заменить референс, сохранив существующий Avatar ID. Runway повторно обработает изображение, и это может расходовать кредиты. Не делай замену во время звонка.</p>
+          <label class="switch-row">
+            <input type="checkbox" id="replaceAvatarConsent">
+            <span>Подтверждаю замену фотографии у текущего персонажа.</span>
+          </label>
+          <button class="btn alt" id="replaceAvatarImage" style="margin-top:10px">Заменить фото существующего аватара</button>
+        </div>
         <div class="hint">Одна сессия Runway Characters — до пяти минут. При повторном звонке создаётся новая сессия.</div>
       </section>
     </div>
