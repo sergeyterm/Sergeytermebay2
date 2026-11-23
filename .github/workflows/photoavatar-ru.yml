@@ -129,37 +129,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            set -eu
-            test -f smoke-apk/app-debug.apk
-            adb install -r smoke-apk/app-debug.apk
-            adb logcat -c
-            sleep 6
-            adb shell am start -W -n ru.photoavatarru.app/.RunwayActivity | tee launch.txt
-            grep -q 'Status: ok' launch.txt
-            sleep 5
-            adb shell pidof ru.photoavatarru.app | tee pid.txt
-            test -s pid.txt
-            adb shell dumpsys webviewupdate > webview-provider.txt
-            # Wait for the embedded Chromium page to paint, not merely for Activity launch.
-            found=0
-            n=0
-            while [ "$n" -lt 6 ]; do
-              n=$((n + 1))
-              adb shell uiautomator dump /sdcard/window.xml || true
-              adb pull /sdcard/window.xml window.xml || true
-              if grep -q 'Звонок с ожившим портретом' window.xml; then found=1; break; fi
-              sleep 4
-            done
-            adb exec-out screencap -p > app-launch.png
-            adb logcat -d -v brief > full-logcat.txt
-            adb logcat -d -b crash -v brief > crash-log.txt
-            if grep -E 'FATAL EXCEPTION|Process: ru.photoavatarru.app' crash-log.txt; then exit 1; fi
-            if [ "$found" -ne 1 ]; then
-              echo "WebView content did not become accessible after 24 seconds" >&2
-              grep -iE 'chromium|webview|crash|error|appassets|photoavatar' full-logcat.txt | tail -n 120 || true
-              exit 1
-            fi
+          script: bash photoavatar-ru-android/tools/emulator-smoke.sh
       - name: Upload Android startup evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
