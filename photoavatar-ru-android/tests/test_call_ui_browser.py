@@ -53,6 +53,7 @@ def run_checks():
             page.locator("#consent").check()
             page.locator("#startCall").click()
             page.locator("#callScreen").wait_for(state="visible")
+            assert page.locator("#avatarVideo").evaluate("(el) => getComputedStyle(el).opacity") == "0", "remote video must not cover portrait before track is available"
             # Regression: video is ready before the SDK's late AvatarVideoReady listener.
             # The player must react to its own playback events.
             page.evaluate("""() => {
@@ -72,7 +73,7 @@ def run_checks():
             assert page.locator("#selfTile").is_visible(), "self camera tile missing"
             assert page.locator("#callBackdrop").count()==1, "background placeholder must be a portrait layer"
             assert page.locator("#callBackdrop").evaluate("(el) => getComputedStyle(el).backgroundColor") != "rgba(0, 0, 0, 0)"
-            assert page.locator("#avatarVideo").evaluate("(el) => getComputedStyle(el).opacity") == "0", "remote video must not cover portrait before track is available"
+
             assert page.locator("#avatarVideo").evaluate("(el) => el.tagName") == "VIDEO", "SDK requires HTMLVideoElement"
             assert page.locator("#callName").inner_text().strip(), "call name absent"
             assert page.locator("#callTime").inner_text() == "00:00", "call duration not initialized"
