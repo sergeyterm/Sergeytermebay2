@@ -7,6 +7,9 @@ on:
       - "photoavatar-ru-android/**"
       - ".github/workflows/photoavatar-ru.yml"
   workflow_dispatch:
+concurrency:
+  group: photoavatar-ru-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
