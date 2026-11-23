@@ -38,6 +38,6 @@ echo 'PASS: PhotoAvatar UI visible and no fatal exceptions'
 
 # Test native Android decode and actual MediaPipe WASM inside Android WebView.
 adb install -r smoke-tests/app-debug-androidTest.apk
-adb shell am instrument -w ru.photoavatarru.app.test/ru.photoavatarru.app.GeometryInstrumentation | tee geometry-device-results.txt
+adb shell am instrument -w -r ru.photoavatarru.app.test/ru.photoavatarru.app.GeometryInstrumentation | tee geometry-device-results.txt
 grep -q 'PASS: native import and real offline face geometry on Android' geometry-device-results.txt
 grep -q 'INSTRUMENTATION_CODE: -1' geometry-device-results.txt
