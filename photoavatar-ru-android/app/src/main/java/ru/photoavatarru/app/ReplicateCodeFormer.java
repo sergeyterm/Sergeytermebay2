@@ -77,14 +77,12 @@ final class ReplicateCodeFormer {
     for(int attempt=0;attempt<75;attempt++) {
       String status = prediction.optString("status","");
       if("succeeded".equals(status)) {
-        String url = prediction.optString("output","");
-        if(url.isEmpty()) {
-          JSONArray array = prediction.optJSONArray("output");
-          if(array!=null && array.length()>0) url = array.optString(0);
-        }
+        String url = "";
+        JSONArray array = prediction.optJSONArray("output");
+        if(array!=null && array.length()>0) url = array.optString(0);
+        else url = prediction.optString("output","");
         if (!url.startsWith("https://replicate.delivery/") &&
-            !url.startsWith("https://pbxt.replicate.delivery/") &&
-            !url.startsWith("https://replicate.delivery"))
+            !url.startsWith("https://pbxt.replicate.delivery/"))
           throw new IOException("CodeFormer не вернул разрешённый HTTPS URL результата");
         String encoded = fetchAndEncodeJpeg(url);
         return new JSONObject().put("photo",encoded)
