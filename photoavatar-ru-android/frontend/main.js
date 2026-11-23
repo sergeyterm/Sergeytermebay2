@@ -12,6 +12,16 @@ let inCall = false;
 let micMuted = false;
 let speakerMuted = false;
 let busy = false;
+let callSessionId = '';
+let callGeneration = 0;
+let callStartedAt = 0;
+let callTimer = null;
+let callStage = 'Не подключено';
+let lastCallError = '';
+let localStream = null;
+let cameraFacing = 'user';
+let toastTimer = null;
+
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -234,69 +244,172 @@ $('resetAvatar').onclick = () => {
   status('Можно создать нового персонажа. Ранее созданный персонаж остаётся в Runway Dev.');
 };
 
+
 function setCallState(value) {
   $('callState').textContent=value;
   $('loadingText').textContent=value;
 }
+function setCallStage(stage, message) {
+  callStage = stage;
+  setCallState(message);
+  $('diagnosticOutput').textContent = 'Этап: ' + stage + '\nСтатус: ' + message;
+}
+function showCallToast(text) {
+  const el = $('callToast');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 4800);
+}
 function appendTranscript(entry) {
   if(!entry || !entry.text)return;
   const d=document.createElement('div');
-  d.textContent=(entry.role==='user'?'Ты: ':'Аватар: ')+entry.text;
+  d.textContent=(entry.role==='user'?'Вы: ':'Аватар: ')+entry.text;
   $('transcript').append(d);
   $('transcript').scrollTop=$('transcript').scrollHeight;
   while($('transcript').children.length>14)$('transcript').firstElementChild.remove();
 }
 function updateSpeaker() {
-  const media=$('avatarVideo').querySelectorAll('video,audio');
-  media.forEach(e=>{e.muted=speakerMuted;});
+  const remote = $('avatarVideo').querySelectorAll('video,audio');
+  remote.forEach(e => {e.muted=speakerMuted;});
+  $('speaker').classList.toggle('off',speakerMuted);
+  $('speaker').setAttribute('aria-pressed',String(!speakerMuted));
+  $('speakerLabel').textContent=speakerMuted?'Звук выкл.':'Звук';
+}
+function updateCameraUI() {
+  const enabled = !!localStream;
+  $('selfVideo').classList.toggle('hidden',!enabled);
+  $('selfPlaceholder').classList.toggle('hidden',enabled);
+  $('flipCamera').classList.toggle('hidden',!enabled);
+  $('selfCamera').classList.toggle('off',!enabled);
+  $('selfCamera').setAttribute('aria-pressed',String(enabled));
+  $('cameraLabel').textContent=enabled?'Камера':'Камера выкл.';
+}
+async function stopSelfCamera() {
+  const previous = localStream; localStream = null;
+  if(previous) previous.getTracks().forEach(track => track.stop());
+  const video = $('selfVideo');
+  video.pause(); video.srcObject=null;
+  updateCameraUI();
+}
+async function startSelfCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('Камера недоступна в текущей версии Android WebView');
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio:false,video:{facingMode:{ideal:cameraFacing},width:{ideal:480},height:{ideal:640}}
+  });
+  if(!inCall){stream.getTracks().forEach(track=>track.stop());return;}
+  localStream=stream;
+  $('selfVideo').srcObject=stream;
+  await $('selfVideo').play().catch(()=>{});
+  updateCameraUI();
+}
+async function toggleSelfCamera() {
+  if(!inCall)return;
+  try {if(localStream)await stopSelfCamera();else await startSelfCamera();}
+  catch(e){showCallToast('Камера: '+(e.message || 'нет разрешения'));}
 }
 async function endCall() {
-  if(!inCall)return;
-  inCall=false;
-  if(currentCall){
-    try{await currentCall.end();}catch(e){}
-    currentCall=null;
-  }
+  if(!inCall&&!currentCall&&!callSessionId)return;
+  callGeneration++;
+  inCall = false;
+  if(callTimer){clearInterval(callTimer);callTimer=null;}
+  const oldCall=currentCall;currentCall=null;
+  const oldSession=callSessionId;callSessionId='';
+  try {if(oldCall) await oldCall.end();}catch(e){}
+  if(oldSession) native('cancelSession',{sessionId:oldSession},25000).catch(()=>{});
+  await stopSelfCamera();
   $('avatarVideo').replaceChildren();
   $('callScreen').classList.remove('active');
   $('connecting').classList.remove('hidden');
-  status('Видеозвонок завершён. Можно позвонить снова.');
+  $('callError').classList.add('hidden');
+  $('callDiagnostics').classList.add('hidden');
+  $('callToast').classList.add('hidden');
+  if(lastCallError)status(lastCallError,true);
+  else status('Видеозвонок завершён. Можно позвонить снова.');
+}
+function showCallFailure(error, stage) {
+  const msg = String(error && error.message ? error.message : error).slice(0,400);
+  lastCallError = 'Ошибка видеозвонка ['+stage+']: '+msg;
+  $('callErrorMessage').textContent = msg;
+  $('callErrorStage').textContent = 'Этап: '+stage;
+  $('diagnosticOutput').textContent =
+    'Время: '+new Date().toLocaleString('ru-RU')+'\nЭтап: '+stage+'\nОшибка: '+msg+
+    '\nAndroid: '+(navigator.userAgent || 'неизвестно').slice(0,200);
+  setCallState('Не удалось подключиться');
+  $('connecting').classList.add('hidden');
+  $('callError').classList.remove('hidden');
+  $('callDiagnostics').classList.remove('hidden');
+  status(lastCallError,true);
 }
 window.__onAndroidBack=()=>{if(inCall){endCall();return true;}return false;};
+$('callBack').onclick=()=>endCall();
+$('callInfo').onclick=()=>$('callDiagnostics').classList.toggle('hidden');
+$('callErrorClose').onclick=()=>endCall();
+$('selfCamera').onclick=()=>toggleSelfCamera();
+$('flipCamera').onclick=async()=>{
+  if(!localStream)return;
+  await stopSelfCamera();
+  cameraFacing=cameraFacing==='user'?'environment':'user';
+  try{await startSelfCamera();}
+  catch(e){showCallToast('Смена камеры: '+(e.message||'не получилось'));}
+};
 
 $('startCall').onclick = async () => {
-  if(busy||!UUID.test(avatarId))return;
-  if(!$('consent').checked){status('Подтверди согласие на использование фото/голоса и оплату сеанса.',true);return;}
+  if(busy||!UUID.test(avatarId)) {
+    if(!UUID.test(avatarId))status('Персонаж не готов. Сначала создай аватар.',true);
+    return;
+  }
+  if(!$('consent').checked){
+    status('Подтверди согласие на использование фото/голоса и возможные расходы Runway.',true);
+    return;
+  }
   remember();setBusy(true);inCall=true;
+  const generation=++callGeneration;
+  lastCallError=''; callSessionId='';
   micMuted=false;speakerMuted=false;
-  $('mute').classList.remove('off');$('speaker').classList.remove('off');
-  $('mute').textContent='🎙';$('speaker').textContent='🔊';
+  $('mute').classList.remove('off');
+  $('mute').setAttribute('aria-pressed','true');
+  $('micLabel').textContent='Микрофон';
   $('callName').textContent=$('name').value.trim() || 'Собеседник';
   if(imageUrl)$('callPhoto').src=imageUrl;
   $('transcript').replaceChildren();
   $('callScreen').classList.add('active');
   $('connecting').classList.remove('hidden');
-  setCallState('Подготавливаю сессию Runway…');
+  $('callError').classList.add('hidden');
+  $('callDiagnostics').classList.add('hidden');
+  updateCameraUI(); updateSpeaker();
+  $('callTime').textContent='00:00';
+  setCallStage('1/3 — создание сессии','Вызываем собеседника…');
+  callStartedAt=Date.now();
+  if(callTimer)clearInterval(callTimer);
+  callTimer=setInterval(()=>{
+    if(!inCall)return;
+    const seconds=Math.floor((Date.now()-callStartedAt)/1000);
+    $('callTime').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+  },1000);
   try {
     const creds=await native('startSession',{
       avatarId,
       personality:personaText(),
-      startScript:'Привет! Я рад тебя слышать. О чём поговорим?'
-    },100000);
-    if(!inCall)return;
-    setCallState('Устанавливаю видеосвязь…');
+      startScript:'Привет! Рад нашей встрече. О чём поговорим?'
+    },120000);
+    if(!inCall||generation!==callGeneration) {
+      if(creds.sessionId)native('cancelSession',{sessionId:creds.sessionId},25000).catch(()=>{});
+      return;
+    }
+    callSessionId=creds.sessionId||'';
+    setCallStage('2/3 — WebRTC','Подключаем видео и микрофон…');
     const session=await streamTo({credentials:creds,target:$('avatarVideo')});
-    if(!inCall){await session.end();return;}
+    if(!inCall||generation!==callGeneration){await session.end();return;}
     currentCall=session;
-    setCallState('● На связи');
+    setCallStage('3/3 — на связи','Видеозвонок · на связи');
     $('connecting').classList.add('hidden');
     session.on(AvatarEvent.Transcript,appendTranscript);
     updateSpeaker();
   }catch(e){
-    const msg=e && e.message?e.message:String(e);
-    setCallState('Не удалось подключиться');
-    status('Ошибка видеозвонка: '+msg,true);
-    await endCall();
+    if(inCall&&generation===callGeneration)showCallFailure(e,callStage);
   }finally{setBusy(false);}
 };
 $('mute').onclick=async()=>{
@@ -305,14 +418,11 @@ $('mute').onclick=async()=>{
     await currentCall.mic.toggle();
     micMuted=!micMuted;
     $('mute').classList.toggle('off',micMuted);
-    $('mute').textContent=micMuted?'🔇':'🎙';
-  }catch(e){setCallState('Не удалось переключить микрофон');}
+    $('mute').setAttribute('aria-pressed',String(!micMuted));
+    $('micLabel').textContent=micMuted?'Микрофон выкл.':'Микрофон';
+  }catch(e){showCallToast('Микрофон: '+(e.message||'ошибка'));}
 };
-$('speaker').onclick=()=>{
-  speakerMuted=!speakerMuted;updateSpeaker();
-  $('speaker').classList.toggle('off',speakerMuted);
-  $('speaker').textContent=speakerMuted?'🔈':'🔊';
-};
+$('speaker').onclick=()=>{speakerMuted=!speakerMuted;updateSpeaker();};
 $('hangup').onclick=()=>endCall();
 
 restore();
