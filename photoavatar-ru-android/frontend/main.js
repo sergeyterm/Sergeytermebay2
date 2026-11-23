@@ -262,7 +262,7 @@ async function endCall() {
   $('connecting').classList.remove('hidden');
   status('Видеозвонок завершён. Можно позвонить снова.');
 }
-window.__onAndroidBack=()=>{if(inCall)endCall();};
+window.__onAndroidBack=()=>{if(inCall){endCall();return true;}return false;};
 
 $('startCall').onclick = async () => {
   if(busy||!UUID.test(avatarId))return;
