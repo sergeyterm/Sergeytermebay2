@@ -33,12 +33,13 @@ import java.util.concurrent.Executors;
 /** Single-screen Android shell. All Runway authentication happens in native Java. */
 public final class RunwayActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
-    private static final int FILE_PICKER = 2102, AUDIO_PERMISSION = 2103;
+    private static final int FILE_PICKER = 2102, AUDIO_PERMISSION = 2103, CAMERA_PERMISSION = 2104;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
     private ValueCallback<Uri[]> pendingFiles;
     private PermissionRequest pendingAudio;
+    private PermissionRequest pendingCamera;
     private volatile boolean destroyed = false;
 
     @Override public void onCreate(Bundle state) {
@@ -123,19 +124,23 @@ public final class RunwayActivity extends Activity {
                         request.deny(); return;
                     }
                     String[] resources = request.getResources();
-                    if (resources.length != 1 || !PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0])) {
-                        request.deny(); return;
-                    }
-                    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                    if (resources.length != 1) { request.deny(); return; }
+                    final boolean audio = PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0]);
+                    final boolean camera = PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resources[0]);
+                    if (!audio && !camera) { request.deny(); return; }
+                    final String androidPermission = audio ? Manifest.permission.RECORD_AUDIO : Manifest.permission.CAMERA;
+                    final int requestCode = audio ? AUDIO_PERMISSION : CAMERA_PERMISSION;
+                    if (checkSelfPermission(androidPermission) == PackageManager.PERMISSION_GRANTED) {
+                        request.grant(new String[]{resources[0]});
                     } else {
-                        pendingAudio = request;
-                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},AUDIO_PERMISSION);
+                        if (audio) pendingAudio = request; else pendingCamera = request;
+                        requestPermissions(new String[]{androidPermission}, requestCode);
                     }
                 });
             }
             @Override public void onPermissionRequestCanceled(PermissionRequest request) {
                 if (pendingAudio == request) pendingAudio = null;
+                if (pendingCamera == request) pendingCamera = null;
             }
         });
         web.loadUrl(ORIGIN + "/assets/index.html");
@@ -152,11 +157,13 @@ public final class RunwayActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults) {
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
-        if (requestCode != AUDIO_PERMISSION || pendingAudio == null) return;
-        PermissionRequest request = pendingAudio;
-        pendingAudio = null;
+        if (requestCode != AUDIO_PERMISSION && requestCode != CAMERA_PERMISSION) return;
+        PermissionRequest request = requestCode == AUDIO_PERMISSION ? pendingAudio : pendingCamera;
+        if (requestCode == AUDIO_PERMISSION) pendingAudio = null; else pendingCamera = null;
+        if (request == null) return;
         if (grantResults.length == 1 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+            request.grant(new String[]{requestCode == AUDIO_PERMISSION ?
+                PermissionRequest.RESOURCE_AUDIO_CAPTURE : PermissionRequest.RESOURCE_VIDEO_CAPTURE});
         else request.deny();
     }
 
@@ -223,6 +230,10 @@ public final class RunwayActivity extends Activity {
                                 p.getString("avatarId"),p.optString("personality",""),
                                 p.optString("startScript",""));
                             break;
+                        case "cancelSession":
+                            new RunwayApi(RunwayActivity.this).cancelSession(p.getString("sessionId"));
+                            result = new JSONObject().put("cancelled",true);
+                            break;
                         default: throw new IOException("Неизвестная операция");
                     }
                     deliver(id,success(result));
@@ -253,6 +264,7 @@ public final class RunwayActivity extends Activity {
         worker.shutdownNow();
         if (pendingFiles != null) {pendingFiles.onReceiveValue(null);pendingFiles=null;}
         if (pendingAudio != null) {pendingAudio.deny();pendingAudio=null;}
+        if (pendingCamera != null) {pendingCamera.deny();pendingCamera=null;}
         if (web != null) {
             web.loadUrl("about:blank"); web.destroy();web=null;
         }
