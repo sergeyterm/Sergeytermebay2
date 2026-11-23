@@ -26,6 +26,8 @@ let lastCallError = '';
 let localStream = null;
 let cameraFacing = 'user';
 let toastTimer = null;
+let remoteVideoProbe = null;
+let remoteVideoWarningShown = false;
 
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -402,6 +404,76 @@ function setCallStage(stage, message) {
   setCallState(message);
   $('diagnosticOutput').textContent = 'Этап: ' + stage + '\nСтатус: ' + message;
 }
+/**
+ * Runway SDK may emit AvatarVideoReady while streamTo() is still awaiting
+ * LiveKit _connect(). Listen on the real HTMLVideoElement instead of relying
+ * on the SDK event, which can be missed by a late session.on(...) subscriber.
+ */
+function remoteVideoState() {
+  const video=$('avatarVideo');
+  const stream=video.srcObject;
+  let tracks=[];
+  try { if(stream && typeof stream.getVideoTracks==='function') tracks=stream.getVideoTracks(); }
+  catch(e) {}
+  return {
+    tracks:tracks.length, liveTracks:tracks.filter(t=>t.readyState!=='ended').length,
+    width:video.videoWidth||0, height:video.videoHeight||0,
+    readyState:video.readyState||0, paused:video.paused
+  };
+}
+function revealRemoteVideo() {
+  if(!inCall)return false;
+  const video=$('avatarVideo'), state=remoteVideoState();
+  if(state.liveTracks===0 || state.width===0 || state.height===0 || state.readyState<2)return false;
+  video.classList.add('playing');
+  remoteVideoWarningShown=false;
+  if(remoteVideoProbe){clearInterval(remoteVideoProbe);remoteVideoProbe=null;}
+  $('diagnosticOutput').textContent='Видеопоток: кадры доступны ('+state.width+'×'+state.height+')';
+  return true;
+}
+function installRemoteVideoListeners() {
+  const video=$('avatarVideo');
+  // These DOM callbacks are registered before starting a call.
+  for(const event of ['loadedmetadata','loadeddata','canplay','playing','resize','timeupdate']){
+    video.addEventListener(event,()=>{revealRemoteVideo();});
+  }
+  if(typeof video.requestVideoFrameCallback==='function'){
+    const frameLoop=()=>{
+      video.requestVideoFrameCallback(()=>{
+        revealRemoteVideo();
+        frameLoop();
+      });
+    };
+    frameLoop();
+  }
+}
+function startRemoteVideoProbe() {
+  if(remoteVideoProbe)clearInterval(remoteVideoProbe);
+  remoteVideoWarningShown=false;
+  const started=Date.now();
+  remoteVideoProbe=setInterval(()=>{
+    if(!inCall){clearInterval(remoteVideoProbe);remoteVideoProbe=null;return;}
+    if(revealRemoteVideo())return;
+    const v=$('avatarVideo'), state=remoteVideoState();
+    if(state.liveTracks>0 && v.paused){
+      // WebView may pause autoplay despite the Runway track being subscribed.
+      v.play().catch(()=>{});
+    }
+    if(Date.now()-started>18000 && !remoteVideoWarningShown){
+      remoteVideoWarningShown=true;
+      const diagnostic='Видео: '+state.liveTracks+' видеодорожек, '+state.width+'×'+state.height+
+        ', readyState='+state.readyState+', paused='+state.paused;
+      $('diagnosticOutput').textContent+='\n'+diagnostic;
+      showCallToast(state.liveTracks===0
+        ? 'Разговор подключён, но видеоаватар ещё не передал видеопоток'
+        : 'Видеопоток подключён, но кадры ещё не появились. Открой диагностику (ⓘ)');
+    }
+  },600);
+}
+function stopRemoteVideoProbe() {
+  if(remoteVideoProbe){clearInterval(remoteVideoProbe);remoteVideoProbe=null;}
+  remoteVideoWarningShown=false;
+}
 function showCallToast(text) {
   const el = $('callToast');
   el.textContent = text;
@@ -469,6 +541,7 @@ async function endCall() {
   callGeneration++;
   inCall = false;
   if(callTimer){clearInterval(callTimer);callTimer=null;}
+  stopRemoteVideoProbe();
   const oldCall=currentCall;currentCall=null;
   const oldSession=callSessionId;callSessionId='';
   try {if(oldCall) await oldCall.end();}catch(e){}
@@ -496,6 +569,8 @@ function showCallFailure(error, stage) {
     'Время: '+new Date().toLocaleString('ru-RU')+'\nЭтап: '+stage+'\nОшибка: '+msg+
     '\nAndroid: '+(navigator.userAgent || 'неизвестно').slice(0,200);
   setCallState('Не удалось подключиться');
+  stopRemoteVideoProbe();
+  $('avatarVideo').classList.remove('playing');
   $('connecting').classList.add('hidden');
   $('callError').classList.remove('hidden');
   // Keep advanced diagnostics behind the info button; show the readable error card.
@@ -539,6 +614,7 @@ $('startCall').onclick = async () => {
   $('callName').textContent=$('name').value.trim() || 'Собеседник';
   applyCallBackdrop(imageUrl || avatarPreview);
   $('avatarVideo').classList.remove('playing');
+  stopRemoteVideoProbe();
   $('callBackdrop').classList.remove('hidden');
   $('transcript').replaceChildren();
   $('callScreen').classList.add('active');
@@ -584,13 +660,17 @@ $('startCall').onclick = async () => {
     }
     session.on(AvatarEvent.Transcript,appendTranscript);
     session.on(AvatarEvent.AvatarVideoReady,()=>{
-      // Never leave the screen black during avatar processing.
-      $('avatarVideo').classList.add('playing');
+      // Secondary event: its first emission can precede streamTo() resolution.
+      // The HTMLVideoElement events and srcObject checks are authoritative.
+      setTimeout(revealRemoteVideo,0);
     });
     session.on(AvatarEvent.LocalVideoReady,attachSelfPreview);
     session.on(AvatarEvent.Error,e=>showCallToast('Runway: '+(e.message||e.code||'ошибка медиа')));
     if(!session.mic.isEnabled)showCallToast('Разреши доступ к микрофону в настройках Android');
     setCallStage('3/3 — на связи','Видеозвонок · на связи');
+    // Check a stream that arrived before event subscription.
+    revealRemoteVideo();
+    startRemoteVideoProbe();
     $('connecting').classList.add('hidden');
     updateCameraUI();
     updateSpeaker();
@@ -611,6 +691,7 @@ $('mute').onclick=async()=>{
 $('speaker').onclick=()=>{speakerMuted=!speakerMuted;updateSpeaker();};
 $('hangup').onclick=()=>endCall();
 
+installRemoteVideoListeners();
 restore();
 native('state',{}).then(state=>{
   if(state.embeddedKey){
