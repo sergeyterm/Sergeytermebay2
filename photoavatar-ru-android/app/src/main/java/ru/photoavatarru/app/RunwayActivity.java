@@ -220,10 +220,27 @@ public final class RunwayActivity extends Activity {
                             new RunwayApi(RunwayActivity.this).waitForVoice(p.getString("voiceId"));
                             result = new JSONObject().put("ready",true);
                             break;
+                        case "detectFace":
+                            // Bundled ML Kit keeps the image entirely on the phone.
+                            LocalFaceDetector.detect(p.getString("photo"), new LocalFaceDetector.Callback() {
+                                @Override public void success(JSONObject data) {
+                                    try { deliver(id, RunwayActivity.success(data)); }
+                                    catch(Exception e) { deliver(id, RunwayActivity.failure(e)); }
+                                }
+                                @Override public void error(Exception e) {
+                                    deliver(id, RunwayActivity.failure(e));
+                                }
+                            });
+                            return;
                         case "createAvatar":
                             result = new JSONObject().put("id",new RunwayApi(RunwayActivity.this).createAvatar(
                                 p.getString("photo"),p.optString("name",""),p.getString("personality"),
-                                p.optString("voiceType","preset"),p.optString("voiceId","clara")));
+                                p.optString("voiceType","preset"),p.optString("voiceId","clara"),
+                                p.optString("imageProcessing","optimize")));
+                            break;
+                        case "updateAvatarImage":
+                            result = new RunwayApi(RunwayActivity.this).updateAvatarImage(
+                                p.getString("avatarId"),p.getString("photo"),p.optString("imageProcessing","optimize"));
                             break;
                         case "avatarStatus":
                             result = new RunwayApi(RunwayActivity.this).getAvatarStatus(
