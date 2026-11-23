@@ -60,7 +60,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoAvatarRU-1.4.0-whatsapp-style-call-screenshots
+          name: PhotoAvatarRU-1.4.1-whatsapp-style-call-screenshots
           path: photoavatar-ru-android/ui-whatsapp-call-error-*.png
           retention-days: 14
           if-no-files-found: warn
@@ -75,14 +75,14 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoAvatarRU-Android-1.4.0-debug
+          name: PhotoAvatarRU-Android-1.4.1-debug
           path: photoavatar-ru-android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
           if-no-files-found: error
       - name: Upload unsigned APK for private key injection
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoAvatarRU-Android-1.4.0-unsigned
+          name: PhotoAvatarRU-Android-1.4.1-unsigned
           path: photoavatar-ru-android/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 14
           if-no-files-found: error
@@ -114,7 +114,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: PhotoAvatarRU-Android-1.4.0-debug
+          name: PhotoAvatarRU-Android-1.4.1-debug
           path: smoke-apk
       - name: Enable KVM for Android Emulator
         run: |

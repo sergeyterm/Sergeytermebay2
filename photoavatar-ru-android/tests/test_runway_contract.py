@@ -33,6 +33,13 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('Bearer ',RUNWAY)
         self.assertIn('Thread.sleep(1000)',RUNWAY)
         self.assertIn('Thread.sleep(2000)',RUNWAY)
+        self.assertIn('getAvatarStatus(String avatarId)',RUNWAY)
+        self.assertIn('"/v1/avatars/" + avatarId',RUNWAY)
+        self.assertIn('case "avatarStatus":',ACTIVITY)
+        self.assertIn("'avatarStatus'", CLIENT)
+        self.assertIn('awaitAvatarReady',CLIENT)
+        self.assertIn('id="callBackdrop"',HTML)
+        self.assertNotIn('PHOTOAVATAR RU · ВИДЕОСВЯЗЬ',HTML)
         self.assertNotIn('"/consume"', RUNWAY)
         self.assertIn('.put("sessionKey", sessionKey)', RUNWAY)
 
@@ -80,7 +87,7 @@ class RunwayContracts(unittest.TestCase):
         data=(ROOT/'app/build.gradle').read_text()
         self.assertRegex(data,r'compileSdk\s+35')
         self.assertRegex(data,r'minSdk\s+26')
-        self.assertIn("versionName '1.4.0'",data)
+        self.assertIn("versionName '1.4.1'",data)
 
 if __name__=='__main__':
     unittest.main()
