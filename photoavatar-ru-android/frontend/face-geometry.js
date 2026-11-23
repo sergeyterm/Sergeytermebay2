@@ -89,7 +89,7 @@ export function wireGeometry({getPhoto,getCandidates,selectCandidate,align,guard
         try{opened=await openPhotoFile(item.file);const result=await analyzeGeometry(opened.image);results.push({item,result,score:Math.round(.65*result.metrics.score+.35*(item.result?.score||0))});}
         catch(e){results.push({item,error:e.message||String(e),score:-1});}finally{opened?.dispose();}
       }
-      if(getCandidates().map(x=>x.file).join('|')!==candidates.map(x=>x.file).join('|')){note('Набор снимков изменился. Повтори сравнение.');return;}
+      if(getCandidates().length!==candidates.length||getCandidates().some((x,i)=>x.file!==candidates[i].file)){note('Набор снимков изменился. Повтори сравнение.');return;}
       const ranked=results.slice().sort((a,b)=>b.score-a.score);
       for(const row of ranked){const box=document.createElement('div');box.className='geometry-row';
         const title=document.createElement('strong');title.textContent='Снимок '+(candidates.indexOf(row.item)+1)+' · '+(row.score<0?'нет сетки':row.score+'/100');
