@@ -1,4 +1,5 @@
 import { streamTo, AvatarEvent } from '@runwayml/avatars';
+import { composePortrait, makeDetectionImage } from './portrait-crop.js';
 
 const $ = (id) => document.getElementById(id);
 const pending = new Map();
@@ -6,6 +7,9 @@ let sequence = 0;
 let image = null;
 let imageUrl = '';
 let activeTile = -1;
+let currentFace = null;
+let preparedImage = '';
+let detectionToken = 0;
 let avatarId = '';
 let avatarPreview = '';
 let currentCall = null;
@@ -63,7 +67,7 @@ function setBusy(state) {
   for (const id of ['createAvatar','testConnection','startCall','saveKey']) $(id).disabled = state;
 }
 function remember() {
-  for (const id of ['name','topic','persona','voiceMode','voiceId']) {
+  for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode']) {
     try {localStorage.setItem('runway_'+id, $(id).value);}catch(e){}
   }
 }
@@ -108,11 +112,18 @@ async function loadImage(file) {
   await img.decode();
   image = img;
   activeTile = -1;
+  currentFace = null;
+  preparedImage = '';
+  $('photoTools').classList.remove('hidden');
+  $('portraitZoom').value='1';
+  $('portraitVertical').value='0';
+  $('replaceAvatarConsent').checked=false;
   $('preview').src = imageUrl;
   $('preview').style.display = 'block';
   $('tileBlock').classList.remove('hidden');
   $('photoHint').textContent = 'Выбран полный кадр. Для коллажа 3×3 нажми на один фронтальный ракурс ниже.';
   drawTiles();
+  await detectFaceAndRender();
 }
 
 function drawTiles() {
@@ -139,6 +150,7 @@ function drawTiles() {
       activeTile=tile;
       $('photoHint').textContent='Выбран ракурс №'+(tile+1)+'. В Runway будет передана только эта ячейка.';
       drawTiles();
+      detectFaceAndRender();
     };
     el.append(button);
   }
@@ -148,26 +160,66 @@ $('photo').addEventListener('change',async(e)=>{
   try { await loadImage(e.target.files[0]);status('Фото загружено. Теперь настрой голос и описание собеседника.');}
   catch(ex){labelError(ex);}
 });
-$('useFull').onclick=()=> {activeTile=-1;drawTiles();$('photoHint').textContent='Будет использована вся фотография целиком.';};
+$('useFull').onclick=()=> {
+  activeTile=-1;
+  drawTiles();
+  $('photoHint').textContent='Будет использован один фронтальный портрет.';
+  detectFaceAndRender();
+};
+$('redetectFace').onclick=()=>detectFaceAndRender();
+$('portraitZoom').addEventListener('input',refreshPreparedPreview);
+$('portraitVertical').addEventListener('input',refreshPreparedPreview);
+
+
+
+function refreshPreparedPreview() {
+  if(!image)return;
+  try {
+    const portrait=composePortrait(
+      image,activeTile,currentFace,
+      Number($('portraitZoom').value),Number($('portraitVertical').value)
+    );
+    if(portrait.dataUrl.length>4_800_000)throw new Error('Референс слишком большой');
+    preparedImage=portrait.dataUrl;
+    $('preparedPreview').src=preparedImage;
+  }catch(e){
+    preparedImage='';
+    $('faceStatus').textContent='Ошибка подготовки кадра: '+(e.message||String(e));
+  }
+}
+
+async function detectFaceAndRender() {
+  if(!image)return;
+  const token=++detectionToken;
+  currentFace=null;
+  $('faceStatus').textContent='Определяю лицо на телефоне (без отправки фото в интернет)…';
+  refreshPreparedPreview(); // preview remains usable even if detection fails
+  try {
+    const source=makeDetectionImage(image,activeTile);
+    const result=await native('detectFace',{photo:source},35000);
+    if(token!==detectionToken || !image)return;
+    if(result.detected){
+      currentFace=result;
+      $('faceStatus').textContent='✓ Лицо найдено. Подготовлен портрет с правильными пропорциями.';
+    } else if(result.facesCount>1){
+      $('faceStatus').textContent='На снимке несколько лиц. Выбери кадр с одним человеком.';
+    } else {
+      $('faceStatus').textContent='Лицо не распознано. Используется центральное кадрирование; можно настроить масштаб вручную.';
+    }
+  }catch(e) {
+    if(token!==detectionToken)return;
+    $('faceStatus').textContent='Автопоиск недоступен. Можно настроить масштаб вручную: '+(e.message||'ошибка');
+  }
+  refreshPreparedPreview();
+}
 
 async function encodePortrait() {
   if(!image)throw new Error('Сначала выбери фотографию.');
-  const canvas=document.createElement('canvas'), W=1088,H=704;
-  canvas.width=W;canvas.height=H;
-  const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#233b41';
-  ctx.fillRect(0,0,W,H);
-  const rect= activeTile<0
-    ? {x:0,y:0,w:image.naturalWidth,h:image.naturalHeight}
-    : {x:(activeTile%3)*image.naturalWidth/3,y:Math.floor(activeTile/3)*image.naturalHeight/3,w:image.naturalWidth/3,h:image.naturalHeight/3};
-  const fit=Math.min(W/rect.w,H/rect.h);
-  const dw=rect.w*fit,dh=rect.h*fit;
-  ctx.drawImage(image,rect.x,rect.y,rect.w,rect.h,(W-dw)/2,(H-dh)/2,dw,dh);
-  for (const quality of [0.9,0.8,0.65]) {
-    const encoded=canvas.toDataURL('image/jpeg',quality);
-    if(encoded.length<4_800_000)return encoded;
+  if(!preparedImage)refreshPreparedPreview();
+  if(!preparedImage || !preparedImage.startsWith('data:image/jpeg;base64,')){
+    throw new Error('Не получилось подготовить референсное изображение.');
   }
-  throw new Error('Портрет слишком большой для Runway. Используй более компактный файл.');
+  return preparedImage;
 }
 
 function personaText() {
@@ -229,7 +281,8 @@ $('createAvatar').onclick = async () => {
     }
     status('Создаю персонажа в Runway Characters…');
     const created=await native('createAvatar',{
-      photo,name:$('name').value.trim(),personality:personaText(),voiceType,voiceId
+      photo,name:$('name').value.trim(),personality:personaText(),voiceType,voiceId,
+      imageProcessing:$('processingMode').value
     },80000);
     avatarId=created.id;
     localStorage.setItem('runway_avatar_id',avatarId);
@@ -259,6 +312,37 @@ $('reuseAvatar').onclick=()=>{
   updateReady();
   status('ID сохранён в приложении. Персонаж будет проверен при начале звонка.');
   $('readyCard').scrollIntoView({behavior:'smooth'});
+};
+$('replaceAvatarImage').onclick=async()=>{
+  if(busy || inCall)return;
+  if(!UUID.test(avatarId)){status('Персонаж не выбран.',true);return;}
+  if(!image){status('Сначала загрузи новую фотографию и проверь подготовленный портрет.',true);return;}
+  if(!$('replaceAvatarConsent').checked || !$('consent').checked){
+    status('Подтверди замену фото и разрешение на возможные расходы Runway.',true);
+    return;
+  }
+  remember();
+  setBusy(true);
+  try {
+    const photo=await encodePortrait();
+    status('Заменяю референсную фотографию существующего персонажа…');
+    const result=await native('updateAvatarImage',{
+      avatarId,
+      photo,
+      imageProcessing:$('processingMode').value
+    },95000);
+    if(!result.updated || result.id!==avatarId)throw new Error('Не удалось подтвердить обновление персонажа');
+    // Only after the API confirms the operation, update local call preview.
+    const thumbnail=document.createElement('canvas');
+    thumbnail.width=320;thumbnail.height=208;
+    const im=new Image();im.src=photo;await im.decode();
+    thumbnail.getContext('2d').drawImage(im,0,0,320,208);
+    avatarPreview=thumbnail.toDataURL('image/jpeg',0.65);
+    localStorage.setItem('runway_avatar_preview',avatarPreview);
+    $('replaceAvatarConsent').checked=false;
+    status('✓ Фото заменено. Avatar ID не изменился. Runway может заново обрабатывать персонажа. Перед звонком приложение проверит статус READY.');
+  }catch(e){labelError(e);}
+  finally{setBusy(false);}
 };
 $('resetAvatar').onclick = () => {
   avatarId='';
