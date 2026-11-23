@@ -225,6 +225,10 @@ public final class RunwayActivity extends Activity {
                                 p.getString("photo"),p.optString("name",""),p.getString("personality"),
                                 p.optString("voiceType","preset"),p.optString("voiceId","clara")));
                             break;
+                        case "avatarStatus":
+                            result = new RunwayApi(RunwayActivity.this).getAvatarStatus(
+                                p.getString("avatarId"));
+                            break;
                         case "startSession":
                             result = new RunwayApi(RunwayActivity.this).startSession(
                                 p.getString("avatarId"),p.optString("personality",""),
