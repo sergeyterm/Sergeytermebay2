@@ -65,6 +65,11 @@ def run_checks():
             page.locator("#callErrorClose").click()
             page.locator("#callScreen").wait_for(state="hidden")
             assert "Недостаточно кредитов" in page.locator("#status").inner_text(), "Error must persist on setup"
+            page.locator("#resetAvatar").click()
+            assert not page.locator("#readyCard").is_visible(), "Reset must hide ready card"
+            page.locator("#reuseId").fill(SAMPLE_ID)
+            page.locator("#reuseAvatar").click()
+            assert page.locator("#readyCard").is_visible(), "Existing avatar must be restorable by ID"
             assert not errors, "Uncaught client JS errors: "+repr(errors)
             print(f"PASS: messenger-style video call at {width}x{height}, controls, diagnostic overlay and persistent error")
             context.close()

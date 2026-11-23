@@ -237,6 +237,15 @@ $('createAvatar').onclick = async () => {
   }catch(e){labelError(e);}
   finally{setBusy(false);}
 };
+$('reuseAvatar').onclick=()=>{
+  const existing=$('reuseId').value.trim();
+  if(!UUID.test(existing)){status('Укажи корректный Runway Avatar ID (UUID).',true);return;}
+  avatarId=existing;
+  localStorage.setItem('runway_avatar_id',existing);
+  updateReady();
+  status('ID сохранён в приложении. Персонаж будет проверен при начале звонка.');
+  $('readyCard').scrollIntoView({behavior:'smooth'});
+};
 $('resetAvatar').onclick = () => {
   avatarId='';
   localStorage.removeItem('runway_avatar_id');

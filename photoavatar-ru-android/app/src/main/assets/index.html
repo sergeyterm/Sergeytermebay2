@@ -179,6 +179,10 @@
           <button class="btn" id="createAvatar">Создать персонажа</button>
         </div>
         <div id="status" class="status" aria-live="polite">Выбери фотографию и настрой собеседника.</div>
+        <label for="reuseId">Уже есть персонаж? Восстановить по Runway Avatar ID</label>
+        <input id="reuseId" type="text" maxlength="36" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
+        <button id="reuseAvatar" class="btn alt" style="margin-top:9px">Подключить существующего персонажа</button>
+        <div class="hint">Это не создаёт персонажа заново и не расходует кредиты. ID можно посмотреть в старом приложении или Runway Dev.</div>
       </section>
       <section class="card hidden" id="readyCard">
         <h2>Персонаж готов к разговору</h2>
