@@ -73,6 +73,12 @@ jobs:
       - name: Build Android APKs (debug and unsigned release)
         working-directory: photoavatar-ru-android
         run: gradle :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
+      - name: Validate 16KiB native library alignment before publishing APKs
+        working-directory: photoavatar-ru-android
+        run: |
+          python3 tools/check_apk_alignment.py \
+            app/build/outputs/apk/debug/app-debug.apk \
+            app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Android Lint
         continue-on-error: true
         working-directory: photoavatar-ru-android
