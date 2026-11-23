@@ -130,7 +130,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             test -f smoke-apk/app-debug.apk
             adb install -r smoke-apk/app-debug.apk
             adb logcat -c
