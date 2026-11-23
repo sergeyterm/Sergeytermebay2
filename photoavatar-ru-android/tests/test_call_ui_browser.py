@@ -48,6 +48,7 @@ def run_checks():
             for control in ["speaker","selfCamera","mute","hangup"]:
                 assert page.locator("#"+control).is_visible(), f"{control} invisible at {width}"
             assert page.locator("#selfTile").is_visible(), "self camera tile missing"
+            assert page.locator("#avatarVideo").evaluate("(el) => el.tagName") == "VIDEO", "SDK requires HTMLVideoElement"
             assert page.locator("#callName").inner_text().strip(), "call name absent"
             assert page.locator("#callTime").inner_text() == "00:00", "call duration not initialized"
             page.locator("#callError").wait_for(state="visible",timeout=12000)

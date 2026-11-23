@@ -25,7 +25,7 @@ class RunwayContracts(unittest.TestCase):
     def test_provider_protocol(self):
         for word in ['https://api.dev.runwayml.com','2024-11-06',
                      '"/v1/voices"','"/v1/avatars"','"/v1/realtime_sessions"',
-                     '"/consume"', '"sessionKey"', '"roomName"',
+                     '"sessionKey"',
                      '"gwm1_avatars"','"custom"','"runway-live-preset"',
                      '"referenceImage"','"personality"','"startScript"',
                      'thread']: # no expected thread literal, verify separately
@@ -33,9 +33,15 @@ class RunwayContracts(unittest.TestCase):
         self.assertIn('Bearer ',RUNWAY)
         self.assertIn('Thread.sleep(1000)',RUNWAY)
         self.assertIn('Thread.sleep(2000)',RUNWAY)
+        self.assertNotIn('"/consume"', RUNWAY)
+        self.assertIn('.put("sessionKey", sessionKey)', RUNWAY)
 
     def test_client_browser_and_controls(self):
         self.assertIn("from '@runwayml/avatars'", CLIENT)
+        self.assertIn('video:false', CLIENT)
+        self.assertIn('session.attachAudio',CLIENT)
+        self.assertIn('AvatarEvent.LocalVideoReady',CLIENT)
+        self.assertIn('id="avatarVideo" autoplay muted playsinline',HTML)
         for token in ['streamTo({credentials:', 'AvatarEvent.Transcript',
                       'currentCall.mic.toggle()', 'oldCall.end()',
                       'tile%3','Math.floor(tile/3)','toDataURL',
@@ -74,7 +80,7 @@ class RunwayContracts(unittest.TestCase):
         data=(ROOT/'app/build.gradle').read_text()
         self.assertRegex(data,r'compileSdk\s+35')
         self.assertRegex(data,r'minSdk\s+26')
-        self.assertIn("versionName '1.3.1'",data)
+        self.assertIn("versionName '1.4.0'",data)
 
 if __name__=='__main__':
     unittest.main()

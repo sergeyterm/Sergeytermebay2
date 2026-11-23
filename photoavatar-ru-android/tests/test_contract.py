@@ -80,7 +80,7 @@ class AndroidProjectContract(unittest.TestCase):
         self.assertLessEqual(min_sdk,37)
         self.assertIn('targetSdk 35',build)
         self.assertIn('compileSdk 35',build)
-        self.assertIn("versionName '1.3.1'",build)
+        self.assertIn("versionName '1.4.0'",build)
 
     def test_all_3x3_tile_coordinates(self):
         for w,h in [(900,900),(1201,1811),(1001,2000)]:
