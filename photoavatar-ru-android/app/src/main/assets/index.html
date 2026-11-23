@@ -161,6 +161,18 @@
 .quality-history-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .quality-history-actions button{padding:6px 9px;min-height:31px;background:#214a52;color:white;border:1px solid #3b6770;border-radius:9px;font-size:11px}
 @media(max-width:370px){.quality-shots,.quality-variants{grid-template-columns:1fr}}
+  #geometryCanvas{height:auto;max-height:none;aspect-ratio:auto;object-fit:contain;width:100%;background:#132a32}
+  .geometry-row{display:grid;gap:7px;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:12px;background:#132b35}
+  .geometry-row small{white-space:normal}
+  #callScreen{touch-action:none}
+  #avatarVideo{transform-origin:center center;object-fit:contain}
+  .call-zoom-toggle{font-size:13px;color:#efffff;background:#193c49df;border:1px solid #70b3b466;border-radius:18px;padding:7px 14px;align-self:center;margin:0 auto 6px;display:block}
+  .call-zoom-panel{background:#0b2029f2;border:1px solid #427482;border-radius:14px;padding:10px;max-width:400px;width:min(90vw,400px);margin:0 auto 8px;max-height:43vh;overflow:auto;touch-action:pan-y}
+  .call-zoom-panel label{display:block;font-size:11px;margin:4px 0 0}
+  .call-zoom-panel input[type=range]{width:100%;height:22px;margin:0;touch-action:auto}
+  .call-zoom-panel select{font-size:12px;padding:5px;margin:0}
+  .call-zoom-panel .btn{font-size:12px;padding:7px;margin-top:5px}
+  .call-zoom-panel small{font-size:10px}
 </style>
 </head>
 <body>
@@ -188,10 +200,11 @@
           <img id="preparedPreview" class="prepared-preview" alt="Результат кадрирования без изменения черт лица">
           <div class="crop-controls">
             <div><label for="portraitZoom">Масштаб лица</label>
-              <input id="portraitZoom" type="range" min="0.8" max="1.5" value="1" step="0.05"></div>
+              <input id="portraitZoom" type="range" min="0.3" max="1.5" value="0.85" step="0.05"><small id="portraitZoomValue">85%</small></div>
             <div><label for="portraitVertical">Выше / ниже</label>
               <input id="portraitVertical" type="range" min="-0.3" max="0.3" value="0" step="0.025"></div>
           </div>
+          <button class="btn alt" id="portraitReset" type="button">Сбросить масштаб и выравнивание</button>
           <button class="btn alt" id="redetectFace" style="margin-top:9px">Заново определить лицо</button>
           <div class="hint">ML Kit ищет лицо прямо на телефоне. Если лицо не найдено, можно настроить масштаб и положение вручную. Форма лица не растягивается.</div>
         </div>
@@ -210,6 +223,23 @@
         <div class="hint" id="photoHint">Для большей реалистичности используй качественный портрет, лицо прямо в камеру.</div>
       </section>
 
+      <section class="card" id="geometrySection">
+        <details id="geometryDetails">
+          <summary class="pro-heading"><span><strong>Face Geometry Pro</strong><small>478 точек MediaPipe · глаза, брови и пропорции</small></span><span class="pro-spark">◎</span></summary>
+          <div class="pro-body">
+            <p class="hint">Модель встроена в приложение, фото анализируется локально. Сетка не передаётся Runway и не меняет его цифровой скелет.</p>
+            <button id="geometryAnalyze" class="btn">Построить точную сетку текущего портрета</button>
+            <label class="switch-row"><input id="geometryFullMesh" type="checkbox" checked><span>Показывать полную сетку</span></label>
+            <canvas id="geometryCanvas" class="prepared-preview hidden" aria-label="Распознанная геометрия лица"></canvas>
+            <div id="geometryStatus" class="hint" role="status">Загрузи фото и нажми «Построить».</div>
+            <div id="geometryMetrics" class="quality-score" style="white-space:pre-line"></div>
+            <button id="geometryAlign" class="btn alt" disabled>Выровнять наклон головы</button>
+            <button id="geometryCompare" class="btn alt" style="margin-top:10px">Сравнить геометрию всех загруженных фото</button>
+            <div id="geometryCandidates"></div>
+            <p class="hint">Для естественной мимики: фронтальный нейтральный кадр, оба глаза открыты, брови видны, без ретуши и жёстких теней. Сохранение черт важнее резкости.</p>
+          </div>
+        </details>
+      </section>
       <section class="card" id="proQualitySection">
         <details id="proQualityDetails">
           <summary class="pro-heading">
@@ -237,9 +267,11 @@
               </div>
               <div id="codeformerState" class="hint" aria-live="polite">Проверяю подключение…</div>
               <label for="codeformerFidelity">Сохранение сходства (fidelity)</label>
-              <input id="codeformerFidelity" type="range" min="0.65" max="0.95" step="0.05" value="0.8">
+              <input id="codeformerFidelity" type="range" min="0.65" max="0.95" step="0.05" value="0.95">
               <label class="switch-row"><input id="codeformerConsent" type="checkbox"><span>Разрешаю передать портрет в Replicate и согласен на возможную оплату CodeFormer.</span></label>
               <button id="runCodeFormer" class="btn alt">Улучшить портрет через CodeFormer</button>
+              <img id="restorationCompare" class="prepared-preview hidden" alt="Результат реставрации для сравнения">
+              <button id="acceptRestoration" class="btn alt hidden">Применить несмотря на предупреждение (без повторной оплаты)</button>
               <div class="hint">Результат появится среди вариантов портрета. Без Replicate эта функция недоступна; остальные инструменты работают локально.</div>
             </details>
           </div>
@@ -256,6 +288,22 @@
         <textarea id="persona" maxlength="3500" placeholder="Например: деликатный, с юмором, умный, заботливый">Говори естественно, без длинных монологов. Слушай внимательно, отвечай по существу и задавай встречные вопросы.</textarea>
       </section>
 
+      <section class="card">
+        <details id="conversationDetails"><summary class="pro-heading"><span><strong>Инструкции аватара</strong><small>Настройка диалога без пересоздания персонажа</small></span></summary>
+          <label for="conversationStyle">Режим общения</label><select id="conversationStyle">
+            <option value="natural">Естественный диалог, слушай и реагируй</option>
+            <option value="calm">Спокойный, деликатный, без спешки</option>
+            <option value="expert">Экспертный, точный, аргументированный</option>
+            <option value="creative">Творческий, с лёгким юмором</option>
+            <option value="interview">Интервью: уточняй и задавай вопросы</option>
+            <option value="language">Языковой тренер: мягко объясняй ошибки</option>
+          </select>
+          <label for="answerLength">Длина ответов</label><select id="answerLength"><option value="natural">По ситуации</option><option value="short">Кратко, одна-две фразы</option><option value="detailed">Развёрнуто, с примерами</option></select>
+          <label for="greeting">Первая реплика</label><textarea id="greeting" maxlength="2000" rows="2">Привет! Рад нашей встрече. О чём поговорим?</textarea>
+          <label for="extraInstructions">Дополнительные инструкции</label><textarea id="extraInstructions" maxlength="1000" rows="4" placeholder="Например: обращайся на ты, запоминай контекст в рамках разговора, не перебивай."></textarea>
+          <p class="hint">Инструкции передаются как personality и startScript при новом звонке. Это указания для разговора, а не управление мимикой или мышцами лица.</p>
+        </details>
+      </section>
       <section class="card">
         <h2>03 · Голос</h2>
         <small>Runway умеет клонировать голос из аудиозаписи. Для использования чужого голоса необходимо разрешение владельца.</small>
@@ -375,6 +423,15 @@
     <div id="callToast" class="call-toast hidden" role="status"></div>
 
     <footer class="call-bottom">
+      <button id="callZoomToggle" class="call-zoom-toggle" aria-label="Масштаб аватара">Масштаб <span id="callZoomValue">100%</span> ▾</button>
+      <div id="callZoomPanel" class="call-zoom-panel hidden">
+        <label for="callFit">Кадр</label><select id="callFit"><option value="contain">Весь видеокадр</option><option value="cover">На весь экран</option></select>
+        <label for="callZoom">Масштаб (30–150%)</label><input type="range" id="callZoom" min="0.3" max="1.5" step="0.025" value="1">
+        <label for="callPanX">Влево / вправо</label><input type="range" id="callPanX" min="-50" max="50" step="1" value="0">
+        <label for="callPanY">Вверх / вниз</label><input type="range" id="callPanY" min="-50" max="50" step="1" value="0">
+        <button id="callZoomReset" type="button" class="btn alt">Автоматический масштаб</button>
+        <small>Щипок — масштаб, перетаскивание — положение. Изменения локальные и бесплатные.</small>
+      </div>
       <div id="transcript" class="call-transcript" aria-live="polite"></div>
       <div class="call-controls" role="toolbar" aria-label="Управление звонком">
         <button id="speaker" class="call-control" aria-label="Включить или выключить звук" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a5 5 0 0 1 0 6M18.5 6a9 9 0 0 1 0 12"/></svg></button>

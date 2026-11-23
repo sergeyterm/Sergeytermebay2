@@ -109,7 +109,7 @@ function applyEyeDetail(ctx,source,eye,amount) {
   return true;
 }
 
-export async function makeReferenceVariants(preparedImage,eyeLandmarks=null,eyeAmount=.20,codeFormerImage=null) {
+export async function makeReferenceVariants(preparedImage,eyeLandmarks=null,eyeAmount=.20,codeFormerImage=null,restoredLandmarks=null) {
   if(!/^data:image\/(jpeg|png|webp);base64,/.test(preparedImage||''))throw new Error('Подготовь фотографию');
   const options=[
     {id:'natural',name:'Натуральный',subtitle:'Без дополнительных изменений глаз',processing:'none',strength:0},
@@ -125,7 +125,7 @@ export async function makeReferenceVariants(preparedImage,eyeLandmarks=null,eyeA
     ctx.filter=option.id==='balanced'?'contrast(1.025) saturate(1.01) brightness(1.015)':
       option.id==='enhanced'?'contrast(1.045) saturate(1.01) brightness(1.015)':'none';
     ctx.drawImage(original,0,0,1088,704);ctx.filter='none';
-    const eyes=eyeLandmarks||{};
+    const eyes=(option.id==='enhanced'&&codeFormerImage?restoredLandmarks:eyeLandmarks)||{};
     const intensity=clip(eyeAmount,0,.75)*option.strength;
     const beforeEyes=document.createElement('canvas');beforeEyes.width=1088;beforeEyes.height=704;
     beforeEyes.getContext('2d').drawImage(canvas,0,0);

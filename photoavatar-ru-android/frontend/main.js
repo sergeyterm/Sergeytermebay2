@@ -2,6 +2,8 @@ import { streamTo, AvatarEvent } from '@runwayml/avatars';
 import { composePortrait, makeDetectionImage } from './portrait-crop.js';
 import { createProController } from './pro-controller.js';
 import { openPhotoFile } from './photo-file.js';
+import {wireGeometry,validateRestoration} from './face-geometry.js';
+import {wireSmartZoom} from './smart-zoom.js';
 
 const $ = (id) => document.getElementById(id);
 const pending = new Map();
@@ -10,6 +12,7 @@ let image = null;
 let imageUrl = '';
 let activeTile = -1;
 let currentFace = null;
+let geometryUi=null, smartZoom=null, correctionRoll=0;
 let preparedImage = '';
 let detectionToken = 0;
 let avatarId = '';
@@ -75,12 +78,12 @@ function setBusy(state) {
   }
 }
 function remember() {
-  for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode']) {
+  for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode','conversationStyle','greeting','extraInstructions','answerLength']) {
     try {localStorage.setItem('runway_'+id, $(id).value);}catch(e){}
   }
 }
 function restore() {
-  for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode']) {
+  for (const id of ['name','topic','persona','voiceMode','voiceId','processingMode','conversationStyle','greeting','extraInstructions','answerLength']) {
     const s = localStorage.getItem('runway_'+id);
     if (s !== null) $(id).value = s;
     $(id).addEventListener('change', remember);
@@ -118,9 +121,10 @@ async function loadImage(file,{analyze=true}={}) {
   ++detectionToken;
   activeTile = -1;
   currentFace = null;
+  correctionRoll=0;
   preparedImage = '';
   $('photoTools').classList.remove('hidden');
-  $('portraitZoom').value='1';
+  $('portraitZoom').value='0.85';
   $('portraitVertical').value='0';
   $('replaceAvatarConsent').checked=false;
   $('preview').src = imageUrl;
@@ -154,7 +158,7 @@ function drawTiles() {
     const badge=document.createElement('em'); badge.textContent=(tile+1);
     button.append(canvas,badge);
     button.onclick=()=> {
-      activeTile=tile;
+      activeTile=tile; correctionRoll=0;
       $('photoHint').textContent='Выбран ракурс №'+(tile+1)+'. В Runway будет передана только эта ячейка.';
       drawTiles();
       detectFaceAndRender();
@@ -219,7 +223,7 @@ $('nativePhotoPicker').onclick=async()=>{
   finally{setPhotoImportBusy(false);}
 };
 $('useFull').onclick=()=> {
-  activeTile=-1;
+  activeTile=-1; correctionRoll=0;
   drawTiles();
   $('photoHint').textContent='Будет использован один фронтальный портрет.';
   detectFaceAndRender();
@@ -235,12 +239,14 @@ function refreshPreparedPreview() {
   try {
     const portrait=composePortrait(
       image,activeTile,currentFace,
-      Number($('portraitZoom').value),Number($('portraitVertical').value)
+      Number($('portraitZoom').value),Number($('portraitVertical').value),correctionRoll
     );
     if(portrait.dataUrl.length>4_800_000)throw new Error('Референс слишком большой');
     preparedImage=portrait.dataUrl;
     $('preparedPreview').src=preparedImage;
     if(proController)proController.clearPreparedVariants();
+    geometryUi?.reset();
+    $('portraitZoomValue').textContent=Math.round(Number($('portraitZoom').value)*100)+'%';
   }catch(e){
     preparedImage='';
     $('faceStatus').textContent='Ошибка подготовки кадра: '+(e.message||String(e));
@@ -295,8 +301,11 @@ function personaText() {
     'Всегда говори на русском языке. Если спросили об идентичности, объясни, что ты цифровой персонаж, созданный по фотографии.',
     'Говори естественно, поддерживай диалог, используй короткие осмысленные ответы. Не переходи на английский без просьбы.',
     'Характер и стиль: '+description,
-    'Предыстория и тема разговора: '+topic
-  ].join('\n');
+    'Предыстория и тема разговора: '+topic,
+    'Режим общения: '+$('conversationStyle').selectedOptions[0].textContent,
+    'Длина ответа: '+$('answerLength').selectedOptions[0].textContent,
+    'Дополнительные инструкции: '+$('extraInstructions').value.trim()
+  ].join('\n').slice(0,10000);
 }
 
 $('saveKey').onclick = async () => {
@@ -689,6 +698,7 @@ $('startCall').onclick = async () => {
   $('callBackdrop').classList.remove('hidden');
   $('transcript').replaceChildren();
   $('callScreen').classList.add('active');
+  smartZoom?.load();
   $('connecting').classList.remove('hidden');
   $('callError').classList.add('hidden');
   $('callDiagnostics').classList.add('hidden');
@@ -710,7 +720,7 @@ $('startCall').onclick = async () => {
     const creds=await native('startSession',{
       avatarId,
       personality:personaText(),
-      startScript:'Привет! Рад нашей встрече. О чём поговорим?'
+      startScript:$('greeting').value.trim().slice(0,2000)||'Привет! Рад нашей встрече. О чём поговорим?'
     },120000);
     if(!inCall||generation!==callGeneration) {
       if(creds.sessionId)native('cancelSession',{sessionId:creds.sessionId},25000).catch(()=>{});
@@ -774,7 +784,8 @@ proController=createProController({
     updateReady();
     status('Персонаж выбран из истории. Он готов к проверке статуса Runway.');
   },
-  loadImage,detectFaceAndRender,getPersona:personaText,
+  loadImage,detectFaceAndRender,getPersona:personaText,validateRestoration,
+  onVariantChanged:()=>geometryUi?.reset(),
   getName:()=>$('name').value.trim()||'Собеседник',
   getVoice:()=>{
     if($('voiceMode').value==='custom')return {type:'custom',id:UUID.test($('voiceId').value.trim())?
@@ -787,6 +798,9 @@ proController=createProController({
   setAvatarPreview:(data)=>{avatarPreview=data;}
 });
 proController.wire();
+geometryUi=wireGeometry({getPhoto:()=>proController.currentPhoto(),getCandidates:()=>proController.getCandidates(),selectCandidate:item=>proController.selectCandidate(item),guardBusy:()=>busy||photoImportBusy,align:angle=>{correctionRoll=Math.max(-22,Math.min(22,correctionRoll+angle));refreshPreparedPreview();}});
+smartZoom=wireSmartZoom(()=>avatarId);
+$('portraitReset').onclick=()=>{correctionRoll=0;$('portraitZoom').value='0.85';$('portraitVertical').value='0';refreshPreparedPreview();};
 installRemoteVideoListeners();
 restore();
 native('state',{}).then(state=>{

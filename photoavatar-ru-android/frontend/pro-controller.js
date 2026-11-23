@@ -6,16 +6,17 @@ export function createProController(hooks) {
   const {
     native, status, setBusy, isBusy, getImage, getFace, getPrepared,
     getAvatarId, setAvatarId, loadImage, detectFaceAndRender, inCall, getPersona, getName,
-    getVoice, getProcessing, setProcessing, getConsent, setAvatarPreview
+    getVoice, getProcessing, setProcessing, getConsent, setAvatarPreview, validateRestoration, onVariantChanged
   }=hooks;
   const $=id=>document.getElementById(id);
   const state={photos:[],variants:[],selected:null,codeFormerPhoto:null,quality:null};
-  let listRenderBusy=false;
+  let listRenderBusy=false,pendingRestoration=null;
   const e=(type,text)=>{const p=document.createElement(type);p.textContent=text;return p;};
   const note=(id,text)=>{const target=$(id);if(target)target.textContent=text;};
 
   function clearPreparedVariants() {
-    state.variants=[];state.selected=null;state.codeFormerPhoto=null;
+    state.variants=[];state.selected=null;state.codeFormerPhoto=null;pendingRestoration=null;
+    $('acceptRestoration').classList.add('hidden');$('restorationCompare').classList.add('hidden');$('restorationCompare').removeAttribute('src');
     $('variantsGrid').replaceChildren();
     note('selectedVariantStatus','По умолчанию используется подготовленный оригинальный портрет.');
     $('preparedPreview').src=getPrepared()||'';
@@ -102,7 +103,9 @@ export function createProController(hooks) {
     else if(landmarks)
       note('qualityEyeStatus','Найдены глаза. Применяется мягкое локальное повышение контраста без изменения формы.');
     const eyeStrength=Number($('qualityEyeDetail').value)||0;
-    state.variants=await makeReferenceVariants(prepared,landmarks,eyeStrength,state.codeFormerPhoto);
+    let restoredEyes=null;
+    if(state.codeFormerPhoto){try{restoredEyes=await native('detectFace',{photo:state.codeFormerPhoto},15000);}catch(e){}}
+    state.variants=await makeReferenceVariants(prepared,landmarks,eyeStrength,state.codeFormerPhoto,restoredEyes);
     state.selected=null;
     renderVariants();
     note('selectedVariantStatus','Три варианта готовы. Выбери вариант перед созданием или заменой персонажа.');
@@ -128,7 +131,7 @@ export function createProController(hooks) {
     $('preparedPreview').src=variant.image;
     setProcessing(variant.id==='enhanced'?'enhanced':variant.processing);
     note('selectedVariantStatus','Выбран: '+variant.name+'. Этот кадр будет отправлен в Runway после подтверждения.');
-    renderVariants();
+    renderVariants();onVariantChanged?.();
   }
   function currentPhoto() {
     const result=state.variants.find(v=>v.id===state.selected);
@@ -147,11 +150,18 @@ export function createProController(hooks) {
     try {
       const restored=await native('enhanceCodeFormer',{photo:input,fidelity:Number($('codeformerFidelity').value)},205000);
       if(!restored.photo?.startsWith('data:image/jpeg;base64,'))throw new Error('Неверный результат CodeFormer');
-      state.codeFormerPhoto=restored.photo;
-      note('codeformerState','✓ Результат получен. Создай три варианта и выбери CodeFormer + глаза.');
-      await generateThree();
-      selectVariant('enhanced');
       $('codeformerConsent').checked=false;
+      if(getPrepared()!==input){note('codeformerState','Портрет изменился во время реставрации. Результат не применён.');return;}
+      const validation=await validateRestoration(input,restored.photo);
+      if(getPrepared()!==input){note('codeformerState','Портрет изменился. Результат не применён.');return;}
+      if(!validation.verified||validation.changed){
+        pendingRestoration={photo:restored.photo,input};$('acceptRestoration').classList.remove('hidden');
+        $('restorationCompare').src=restored.photo;$('restorationCompare').classList.remove('hidden');
+        note('codeformerState',validation.verified?'ВНИМАНИЕ: пропорции изменились (брови '+(validation.brow*100).toFixed(1)+'%, глаза '+(validation.eyes*100).toFixed(1)+'% межглазного расстояния). Оригинал сохранён.':'Не удалось проверить геометрию CodeFormer: '+validation.error+'. Оригинал сохранён.');return;
+      }
+      state.codeFormerPhoto=restored.photo;
+      note('codeformerState','✓ Реставрация проверена: заметного смещения по порогам не найдено. Это не гарантия мимики Runway.');
+      await generateThree();selectVariant('enhanced');
     } finally {setBusy(false);}
   }
 
@@ -270,6 +280,7 @@ export function createProController(hooks) {
       try{await native('clearCodeFormerToken',{});note('codeformerState','Replicate отключён');}
       catch(err){note('codeformerState','Ошибка: '+err.message);}
     };
+    $('acceptRestoration').onclick=async()=>{if(isBusy()||!pendingRestoration||getPrepared()!==pendingRestoration.input)return;setBusy(true);try{state.codeFormerPhoto=pendingRestoration.photo;pendingRestoration=null;$('acceptRestoration').classList.add('hidden');await generateThree();selectVariant('enhanced');note('codeformerState','Результат применён вручную.');}catch(e){note('codeformerState',e.message);}finally{setBusy(false);}};
     $('runCodeFormer').onclick=()=>enhanceCodeFormer().catch(err=>{note('codeformerState','CodeFormer: '+err.message);});
     $('generateAvatarCandidates').onclick=()=>createSeveral().catch(err=>note('variantBatchStatus',err.message));
     $('refreshHistory').onclick=()=>renderHistory();
@@ -281,5 +292,5 @@ export function createProController(hooks) {
   }
 
   return {wire,chooseFiles,photoUpdated,updateQuality,generateThree,currentPhoto,currentVariant,
-    saveHistory,renderHistory,clearPreparedVariants};
+    saveHistory,renderHistory,clearPreparedVariants,getCandidates:()=>state.photos.filter(x=>!x.invalid),selectCandidate:activateFile};
 }

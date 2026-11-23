@@ -59,6 +59,10 @@ def run_checks():
             })()""")
             page.goto(BASE+"index.html",wait_until="load")
             page.locator("#readyCard").wait_for(state="visible")
+            page.locator("#conversationDetails").evaluate("el=>el.open=true")
+            page.locator("#conversationStyle").select_option("expert")
+            page.locator("#greeting").fill("Добрый день, проверка")
+            page.locator("#extraInstructions").fill("Проверочная инструкция")
             page.locator("#consent").check()
             page.locator("#startCall").click()
             page.locator("#callScreen").wait_for(state="visible")
@@ -92,6 +96,17 @@ def run_checks():
             calls=page.evaluate("window.__calls")
             assert calls.count("avatarStatus")>=2, "must poll until READY"
             assert calls.index("startSession")>calls.index("avatarStatus"), "must not create session before READY"
+            payload=page.evaluate("window.__payloads.find(p=>p.action==='startSession').data")
+            assert payload['startScript']=='Добрый день, проверка'
+            assert 'Проверочная инструкция' in payload['personality']
+            assert 'Экспертный' in payload['personality']
+            page.locator('#callZoomToggle').click()
+            page.locator('#callZoom').evaluate("el=>{el.value='.4';el.dispatchEvent(new Event('input'))}")
+            assert 'scale(0.4)' in page.locator('#avatarVideo').evaluate('el=>el.style.transform')
+            assert page.locator('#callZoomValue').inner_text()=='40%'
+            page.locator('#callZoomReset').click()
+            assert page.locator('#callZoomValue').inner_text()=='100%'
+            page.locator('#callZoomToggle').click()
             assert not page.locator("#callDiagnostics").is_visible()
             page.locator("#callInfo").click()
             assert page.locator("#callDiagnostics").is_visible()

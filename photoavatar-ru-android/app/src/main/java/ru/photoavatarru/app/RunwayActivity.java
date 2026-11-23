@@ -105,13 +105,14 @@ public final class RunwayActivity extends Activity {
                 }
                 if (path == null || !path.startsWith("/assets/")) return emptyResponse();
                 String name = path.substring("/assets/".length());
-                if (!name.matches("[a-z0-9_.-]+") || name.contains("..") || name.equals("runway.key"))
+                if (!name.matches("(?:mediapipe/)?[a-z0-9_.-]+") || name.contains("..") || name.equals("runway.key"))
                     return emptyResponse();
                 try {
                     InputStream stream = getAssets().open(name);
-                    String mime = name.endsWith(".js") ? "application/javascript"
+                    String mime = name.endsWith(".js") || name.endsWith(".mjs") ? "application/javascript"
+                        : name.endsWith(".wasm") ? "application/wasm" : name.endsWith(".task") ? "application/octet-stream"
                         : name.endsWith(".css") ? "text/css" : name.endsWith(".html") ? "text/html" : "text/plain";
-                    return new WebResourceResponse(mime,"UTF-8",stream);
+                    return new WebResourceResponse(mime,mime.equals("application/wasm")||mime.equals("application/octet-stream")?null:"UTF-8",stream);
                 } catch (IOException e) { return emptyResponse(); }
             }
             private WebResourceResponse emptyResponse() {

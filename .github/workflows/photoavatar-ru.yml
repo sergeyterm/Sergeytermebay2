@@ -42,6 +42,12 @@ jobs:
       - name: Install official Runway browser SDK
         working-directory: photoavatar-ru-android/frontend
         run: npm install --no-audit --no-fund
+      - name: Download pinned MediaPipe Face Landmarker model
+        working-directory: photoavatar-ru-android
+        run: |
+          mkdir -p app/src/main/assets/mediapipe
+          curl -fL --retry 3 --max-time 120 https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task -o app/src/main/assets/mediapipe/face_landmarker.task
+          test "$(wc -c < app/src/main/assets/mediapipe/face_landmarker.task)" -gt 1000000
       - name: Bundle Runway video client
         working-directory: photoavatar-ru-android/frontend
         run: npm run build
@@ -51,6 +57,9 @@ jobs:
       - name: Unit-test portrait and eye suitability scoring
         working-directory: photoavatar-ru-android/frontend
         run: npm run test:quality
+      - name: Test face geometry and smart zoom math
+        working-directory: photoavatar-ru-android/frontend
+        run: npm run test:geometry
       - name: Check source and API contracts
         working-directory: photoavatar-ru-android
         run: python3 -m unittest discover -s tests -p "test_*contract.py" -v
@@ -69,7 +78,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoAvatarRU-1.6.1-ProQuality-call-screenshots
+          name: PhotoAvatarRU-1.6.2-ProQuality-call-screenshots
           path: photoavatar-ru-android/ui-whatsapp-call-error-*.png
           retention-days: 14
           if-no-files-found: warn
@@ -90,14 +99,14 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoAvatarRU-Android-1.6.1-debug
+          name: PhotoAvatarRU-Android-1.6.2-debug
           path: photoavatar-ru-android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
           if-no-files-found: error
       - name: Upload unsigned APK for private key injection
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoAvatarRU-Android-1.6.1-unsigned
+          name: PhotoAvatarRU-Android-1.6.2-unsigned
           path: photoavatar-ru-android/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 14
           if-no-files-found: error
@@ -129,7 +138,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: PhotoAvatarRU-Android-1.6.1-debug
+          name: PhotoAvatarRU-Android-1.6.2-debug
           path: smoke-apk
       - name: Enable KVM for Android Emulator
         run: |

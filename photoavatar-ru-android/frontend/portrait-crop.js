@@ -9,7 +9,7 @@ const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
 export function calculatePortraitCrop(width, height, face = null, zoom = 1, vertical = 0) {
   if (!(width > 1 && height > 1)) throw new Error('Неверные размеры изображения');
-  const z = clamp(Number(zoom) || 1, 0.8, 1.5);
+  const z = clamp(Number(zoom) || 1, 0.3, 1.5);
   const offset = clamp(Number(vertical) || 0, -0.35, 0.35);
   const validFace = face && face.detected &&
       face.w > 0.02 && face.h > 0.02 &&
@@ -18,9 +18,10 @@ export function calculatePortraitCrop(width, height, face = null, zoom = 1, vert
   const faceHeight = validFace ? face.h * height : Math.min(width * 0.7, height * 0.37);
   // Keep hair, neck and shoulders: generous vertical context around face.
   const originalHeight = validFace
-    ? Math.max(faceHeight * 1.72, height * 0.48)
+    ? Math.max(faceHeight * 2.20, height * 0.58)
     : Math.min(height, Math.max(width / ratio, height * 0.64));
-  const cropHeight = clamp(originalHeight / z, Math.min(height, 240), height);
+  const requestedHeight = originalHeight / z;
+  const cropHeight = clamp(requestedHeight, Math.min(height, 240), height);
   const cropWidth = Math.min(width, cropHeight * ratio);
   const centerX = validFace ? clamp((face.x + face.w / 2) * width, 0, width) : width / 2;
   const centerY = validFace
@@ -28,7 +29,7 @@ export function calculatePortraitCrop(width, height, face = null, zoom = 1, vert
     : height * 0.50;
   const x = clamp(centerX - cropWidth / 2, 0, width - cropWidth);
   const y = clamp(centerY - cropHeight * 0.48 + offset * cropHeight, 0, height - cropHeight);
-  return { x, y, width: cropWidth, height: cropHeight, detected: Boolean(validFace) };
+  return { x, y, width: cropWidth, height: cropHeight, paddingScale: Math.min(1,cropHeight/requestedHeight), detected: Boolean(validFace) };
 }
 
 export function selectedSource(image, tileIndex = -1) {
@@ -61,7 +62,7 @@ export function makeDetectionImage(image, tileIndex = -1) {
   return canvas.toDataURL('image/jpeg', 0.82);
 }
 
-export function composePortrait(image, tileIndex = -1, face = null, zoom = 1, vertical = 0) {
+export function composePortrait(image, tileIndex = -1, face = null, zoom = 1, vertical = 0, roll = 0) {
   const src = selectedSource(image, tileIndex);
   const plan = calculatePortraitCrop(src.width, src.height, face, zoom, vertical);
   const absolute = {
@@ -85,13 +86,19 @@ export function composePortrait(image, tileIndex = -1, face = null, zoom = 1, ve
   ctx.restore();
 
   // The sharp subject is NEVER stretched: it retains its original pixel ratio.
-  const scale = Math.min(OUTPUT_WIDTH / absolute.width, OUTPUT_HEIGHT / absolute.height);
+  const scale = Math.min(OUTPUT_WIDTH / absolute.width, OUTPUT_HEIGHT / absolute.height)*plan.paddingScale;
   const drawnW = absolute.width * scale;
   const drawnH = absolute.height * scale;
   const destX = (OUTPUT_WIDTH - drawnW) / 2;
   const destY = (OUTPUT_HEIGHT - drawnH) / 2;
 
-  if (drawnW < OUTPUT_WIDTH - 12) {
+  if(plan.paddingScale<.999){
+    // Do not duplicate the face in the enlarged borders when zooming out.
+    ctx.fillStyle='#25383e';ctx.fillRect(0,0,OUTPUT_WIDTH,OUTPUT_HEIGHT);
+  }
+  ctx.save();
+  ctx.translate(OUTPUT_WIDTH/2,OUTPUT_HEIGHT/2);ctx.rotate(-clamp(Number(roll)||0,-22,22)*Math.PI/180);ctx.translate(-OUTPUT_WIDTH/2,-OUTPUT_HEIGHT/2);
+  if (drawnW < OUTPUT_WIDTH - 12 && plan.paddingScale>=.999) {
     // Feather the left/right edges so a portrait phone photo has no harsh seams.
     const layer = document.createElement('canvas');
     layer.width = OUTPUT_WIDTH; layer.height = OUTPUT_HEIGHT;
@@ -112,5 +119,6 @@ export function composePortrait(image, tileIndex = -1, face = null, zoom = 1, ve
       destX, destY, drawnW, drawnH);
   }
 
+  ctx.restore();
   return { dataUrl: canvas.toDataURL('image/jpeg', .91), plan, width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT };
 }
